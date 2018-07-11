@@ -1,0 +1,46 @@
+{
+	"name": "racoon",
+	"version": "1.0.0",
+	"description": "owl data management center",
+	"publishConfig": {
+		"registry": "http://registry.npm.shimo.run"
+	},
+	"main": "dist/index.js",
+	"types": "d/index.d.ts",
+	"scripts": {
+		"build": "tsc",
+		"test": "jest",
+		"lint": "find __tests__ src -name '*.ts' -exec tslint '{}' --fix \\;",
+		"precommit": "lint-staged"
+	},
+	"lint-staged": {
+		"*.ts": [
+			"tslint --fix",
+			"prettier --write",
+			"git add"
+		]
+	},
+	"repository": {
+		"type": "git",
+		"url": "ssh://git@phab.shimo.im/source/racoon.git"
+	},
+	"keywords": [],
+	"author": "Shimo",
+	"license": "ISC",
+	"devDependencies": {
+		"@types/jest": "^23.1.5",
+		"husky": "^0.14.3",
+		"jest": "^23.3.0",
+		"lint-staged": "^7.2.0",
+		"prettier": "^1.13.7",
+		"ts-jest": "^23.0.0",
+		"tslint": "^5.10.0",
+		"tslint-config-prettier": "^1.13.0",
+		"tslint-eslint-rules": "^5.3.1",
+		"typescript": "^2.9.2"
+	},
+	"dependencies": {
+		"redux": "^4.0.0",
+		"reselect": "^3.0.1"
+	}
+}
