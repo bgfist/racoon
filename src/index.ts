@@ -1,8 +1,14 @@
-import { applyMiddleware, createStore, Reducer } from 'redux'
-import thunkMiddleWare from './middlewares/thunk'
-import reducer from './reducers'
+import { HostContainer, IStores } from './host'
+import { ClientContainer, IConnection } from './client'
 
-export * from './actions'
-export type State = typeof reducer extends Reducer<infer T> ? T : any
+export function createHostContainer(stores: IStores) {
+	return new HostContainer(stores)
+}
 
-export default createStore(reducer, applyMiddleware(thunkMiddleWare))
+export function createClientContainer(conn: IConnection) {
+	return new ClientContainer(conn)
+}
+
+export * from './container'
+export * from './host'
+export * from './client'
