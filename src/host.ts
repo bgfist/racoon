@@ -188,8 +188,8 @@ export class HostContainer implements IContainer {
 		return action
 	}
 
-	public getState(store: string) {
-		return this.stores[store].getState()
+	public getState(path: string) {
+		throw new Error('unimplemented')
 	}
 
 	public defineSelectors(selectors: ISelectors) {

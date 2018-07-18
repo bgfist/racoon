@@ -5,8 +5,8 @@ export function createHostContainer(stores: IStores) {
 	return new HostContainer(stores)
 }
 
-export function createClientContainer(conn: IConnection) {
-	return new ClientContainer(conn)
+export function createClientContainer(conn: IConnection, host?: HostContainer) {
+	return new ClientContainer(conn, host)
 }
 
 export * from './container'

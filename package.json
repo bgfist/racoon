@@ -11,7 +11,9 @@
 		"build": "tsc",
 		"test": "jest",
 		"lint": "find __tests__ src -name '*.ts' -exec tslint '{}' --fix \\;",
-		"precommit": "lint-staged"
+		"precommit": "lint-staged",
+		"release": "np",
+		"prepublishOnly": "npm run build"
 	},
 	"lint-staged": {
 		"*.ts": [
@@ -32,6 +34,7 @@
 		"husky": "^0.14.3",
 		"jest": "^23.3.0",
 		"lint-staged": "^7.2.0",
+		"np": "^3.0.4",
 		"prettier": "^1.13.7",
 		"ts-jest": "^23.0.0",
 		"tslint": "^5.10.0",
@@ -40,7 +43,7 @@
 		"typescript": "^2.9.2"
 	},
 	"dependencies": {
-		"redux": "^4.0.0",
-		"reselect": "^3.0.1"
+		"es6-promise": "^4.2.4",
+		"redux": "^4.0.0"
 	}
 }
