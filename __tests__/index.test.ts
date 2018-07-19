@@ -9,6 +9,8 @@ const hostContainer = new HostContainer({
 const { dispatch, getState, observe } = hostContainer
 
 test('basic dispatch', () => {
+	expect(getState('storeA#locale.city')).toBe(initState.locale.city)
+	expect(getState('storeB#name')).toBe(initState.name)
 	dispatch({
 		type: 'SET_NAME',
 		payload: 'B',
@@ -26,7 +28,10 @@ test('basic dispatch', () => {
 		payload: null,
 		store: 'storeA'
 	})
-	expect(getState('storeA')).toBe(initState)
+	expect(getState('storeA')).toEqual({
+		...initState,
+		name: 'B'
+	})
 })
 
 test('basic observing shallow keys', () => {

@@ -51,9 +51,15 @@ export const reducer: Reducer<IState, IAction> = (state: IState = initState, act
 					city: action.payload
 				}
 			}
+		case 'SET_IDENTITY':
+			return {
+				...state,
+				age: action.payload.age,
+				name: action.payload.name
+			}
 		case 'RESET':
 			return initState
 		default:
-			return initState
+			return state
 	}
 }

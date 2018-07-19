@@ -21,10 +21,10 @@ export interface IStores {
 export type IListener = (newValue: any) => void
 
 interface IObservable {
-	type: number
 	prevValue: any
 	getValue: () => any
 	listener: IListener
+	// 可通过判断是否有此值来判定订阅是否为 Map
 	combinePrevValue?: () => any
 }
 
@@ -63,7 +63,7 @@ export class HostContainer implements IContainer {
 
 	private hasChanged(observable: IObservable, newValue: any): boolean {
 		const { prevValue } = observable
-		if (observable.type === 0) {
+		if (!observable.combinePrevValue) {
 			return newValue !== prevValue
 		}
 		return Object.keys(newValue).some(key => newValue[key] !== prevValue[key])
@@ -77,13 +77,16 @@ export class HostContainer implements IContainer {
 				this.observables[key].forEach(observable => {
 					const newValue = observable.getValue()
 					if (this.hasChanged(observable, newValue)) {
-						if (observable.type === 0) {
+						if (!observable.combinePrevValue) {
 							this.executeJobs.push({
 								prevValue: observable.prevValue,
 								newValue,
 								fn: observable.listener
 							})
 						} else {
+							/**
+							 * TODO: 这部分可优化
+							 */
 							const combinedPrevValue = (observable.combinePrevValue as () => any)()
 							const combinedNewValue: { [key: string]: any } = {}
 							Object.keys(combinedPrevValue).forEach(k => {
@@ -119,9 +122,9 @@ export class HostContainer implements IContainer {
 		}
 	}
 
-	private getAccessFunc(keysStr: string | undefined, storeKey: string): () => any {
+	private getAccessFunc(storeKey: string, keysStr: string | undefined): () => any {
 		if (!keysStr) {
-			return () => this.stores[storeKey]
+			return () => this.stores[storeKey].getState()
 		}
 		const keys = keysStr.split('.')
 		return () => {
@@ -159,20 +162,18 @@ export class HostContainer implements IContainer {
 				affected.forEach((key, i) => {
 					observeKeys[i] = key
 				})
-				let prevValue = select(...args)
-				const unsub = this.observe(observeKeys, () => {
-					const newValue = select(...args)
+				let prevValue = select.apply(null, args)
+				return this.observe(observeKeys, () => {
+					const newValue = select.apply(null, args)
 					if (prevValue !== newValue) {
 						prevValue = newValue
 						listener.call(null, newValue)
 					}
 				})
-				return unsub
 			}
 			const [storeKey, keysStr] = path.split('#')
-			const getValue = this.getAccessFunc(keysStr, storeKey)
+			const getValue = this.getAccessFunc(storeKey, keysStr)
 			const observable = {
-				type: 0,
 				prevValue: getValue(),
 				getValue,
 				listener
@@ -182,12 +183,11 @@ export class HostContainer implements IContainer {
 		const allObservables: IObservable[] = []
 		const unsubscribe = Object.keys(path).map(mainKey => {
 			const [storeKey, keysStr] = path[mainKey].split('#')
-			const accessFunc = this.getAccessFunc(keysStr, storeKey)
+			const accessFunc = this.getAccessFunc(storeKey, keysStr)
 			const getValue = () => ({
 				[mainKey]: accessFunc()
 			})
 			const observable = {
-				type: 1,
 				prevValue: getValue(),
 				getValue,
 				listener
@@ -217,12 +217,14 @@ export class HostContainer implements IContainer {
 	}
 
 	public getState(path: string): any {
-		return this.stores[path].getState()
+		const [storeKey, keysStr] = path.split('#')
+		return this.getAccessFunc(storeKey, keysStr)()
 	}
 
 	public defineSelectors(selectors: ISelectors) {
-		Object.keys(selectors).forEach(key => {
-			this.selectors[key] = selectors[key]
-		})
+		this.selectors = {
+			...this.selectors,
+			...selectors
+		}
 	}
 }

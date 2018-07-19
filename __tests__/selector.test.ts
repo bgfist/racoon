@@ -8,7 +8,7 @@ const hostContainer = new HostContainer({
 
 const { dispatch, getState, observe } = hostContainer
 
-test.skip('basic selector', () => {
+describe.only('basic selector observer', () => {
 	hostContainer.defineSelectors({
 		computedDescribe: getStoreState => ({
 			select: (connector: string) => {
@@ -22,22 +22,57 @@ test.skip('basic selector', () => {
 	const unsub = observe('$computedDescribe("-")', currentDescribe => {
 		desc.unshift(currentDescribe)
 	})
-	dispatch({
-		type: 'SET_AGE',
-		payload: 20,
-		store: 'storeA'
+	it('called when on key changed', () => {
+		dispatch({
+			type: 'SET_AGE',
+			payload: 23,
+			store: 'storeA'
+		})
+		expect(desc[0]).toBe(`${initState.name}-23`)
+		dispatch({
+			type: 'SET_NAME',
+			payload: 'newName',
+			store: 'storeA'
+		})
+		expect(desc[0]).toBe('newName-23')
+		dispatch({
+			type: 'SET_IDENTITY',
+			payload: {
+				name: 'Henrry',
+				age: 40
+			},
+			store: 'storeA'
+		})
+		expect(desc[0]).toBe('Henrry-40')
+		expect(desc.length).toBe(3)
 	})
-	expect(desc[0]).toBe(`${initState.name}-20`)
-	dispatch({
-		type: 'SET_NAME',
-		payload: 'newName',
-		store: 'storeA'
+	it('lazy calling', () => {
+		dispatch({
+			type: 'SET_AGE',
+			payload: 40,
+			store: 'storeA'
+		})
+		expect(desc.length).toBe(3)
 	})
-	expect(desc[0]).toBe('newName-20')
-	dispatch({
-		type: 'SET_DELAY',
-		payload: null,
-		store: 'storeA'
+	it("shouldn't called when unconcerned key-value changed", () => {
+		dispatch({
+			type: 'SET_DELAY',
+			payload: null,
+			store: 'storeA'
+		})
+		expect(desc[0]).toBe('Henrry-40')
 	})
-	expect(desc[0]).toBe('newName-20')
+	it('unsubscibe', () => {
+		unsub()
+		dispatch({
+			type: 'SET_IDENTITY',
+			payload: {
+				name: 'Marry',
+				age: 25
+			},
+			store: 'storeA'
+		})
+		expect(desc[0]).toBe('Henrry-40')
+		expect(desc.length).toBe(3)
+	})
 })
