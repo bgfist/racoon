@@ -3,8 +3,10 @@ import { IContainer, IAction } from './container'
 
 export { Store }
 
-export type Selector = () => {
-	select: (getState: HostContainer['getState'], ...args: any[]) => any
+export type Selector = (
+	getState: HostContainer['getState']
+) => {
+	select: (...args: any[]) => any
 	affected: string[]
 }
 
@@ -16,7 +18,7 @@ export interface IStores {
 	[k: string]: Store
 }
 
-export type IListener = (newValue: any, prevValue: any) => void
+export type IListener = (newValue: any) => void
 
 interface IObservable {
 	type: number
@@ -26,10 +28,26 @@ interface IObservable {
 	combinePrevValue?: () => any
 }
 
+interface IExecuteJob {
+	newValue: any
+	prevValue: any
+	fn: IListener
+}
+
+function arrayFind<T>(arr: T[], fn: (item: T) => boolean): T | undefined {
+	for (const item of arr) {
+		if (fn(item)) {
+			return item
+		}
+	}
+	return undefined
+}
+
 export class HostContainer implements IContainer {
 	private stores: IStores
 	private observables: { [storeKey: string]: IObservable[] } = {}
 	private selectors: ISelectors = {}
+	private executeJobs: IExecuteJob[] = []
 
 	constructor(stores: IStores) {
 		this.stores = stores
@@ -37,27 +55,34 @@ export class HostContainer implements IContainer {
 		Object.keys(stores).forEach(key => {
 			this.observables[key] = []
 		})
+		this.observe = this.observe.bind(this)
+		this.dispatch = this.dispatch.bind(this)
+		this.getState = this.getState.bind(this)
+		this.defineSelectors = this.defineSelectors.bind(this)
 	}
 
 	private hasChanged(observable: IObservable, newValue: any): boolean {
 		const { prevValue } = observable
 		if (observable.type === 0) {
-			return newValue === prevValue
+			return newValue !== prevValue
 		}
 		return Object.keys(newValue).some(key => newValue[key] !== prevValue[key])
 	}
 
-	private subscribeAllStore() {
+	private subscribeAllStore(): void {
 		const stores = this.stores
 		Object.keys(stores).forEach(key => {
 			const store = stores[key]
 			store.subscribe(() => {
-				const state = store.getState()
 				this.observables[key].forEach(observable => {
 					const newValue = observable.getValue()
 					if (this.hasChanged(observable, newValue)) {
 						if (observable.type === 0) {
-							observable.listener.call(null, newValue, observable.prevValue)
+							this.executeJobs.push({
+								prevValue: observable.prevValue,
+								newValue,
+								fn: observable.listener
+							})
 						} else {
 							const combinedPrevValue = (observable.combinePrevValue as () => any)()
 							const combinedNewValue: { [key: string]: any } = {}
@@ -67,11 +92,22 @@ export class HostContainer implements IContainer {
 							Object.keys(newValue).forEach(k => {
 								combinedNewValue[k] = newValue[k]
 							})
-							observable.listener.call(null, combinedNewValue, combinedPrevValue)
+							const targetJob = arrayFind<IExecuteJob>(this.executeJobs, job => job.fn === observable.listener)
+							if (targetJob) {
+								targetJob.newValue = combinedNewValue
+							} else {
+								this.executeJobs.push({
+									newValue: combinedNewValue,
+									prevValue: combinedPrevValue,
+									fn: observable.listener
+								})
+							}
 						}
 						observable.prevValue = newValue
 					}
 				})
+				this.executeJobs.forEach(({ fn, newValue }) => fn.call(null, newValue))
+				this.executeJobs = []
 			})
 		})
 	}
@@ -89,35 +125,11 @@ export class HostContainer implements IContainer {
 		}
 		const keys = keysStr.split('.')
 		return () => {
-			let value: any = this.stores[storeKey]
+			let value: any = this.stores[storeKey].getState()
 			keys.forEach(key => {
 				value = value[key]
 			})
 			return value
-		}
-	}
-
-	private getStoreObservable(storeKey: string, keysMap: { [key: string]: string }, listener: IListener): IObservable {
-		const accessFuncs: Array<{
-			(): any
-			key: string
-		}> = []
-		Object.keys(keysMap).forEach(key => {
-			const accessFunc: any = this.getAccessFunc(keysMap[key], storeKey)
-			accessFunc.key = key
-			accessFuncs.push(accessFunc)
-		})
-		return {
-			type: 1,
-			prevValue: {},
-			getValue() {
-				const result: { [key: string]: any } = {}
-				accessFuncs.forEach(fn => {
-					result[fn.key as string] = fn()
-				})
-				return result
-			},
-			listener
 		}
 	}
 
@@ -140,34 +152,50 @@ export class HostContainer implements IContainer {
 
 	public observe(path: string | { [key: string]: string }, listener: IListener): () => void {
 		if (typeof path === 'string') {
-			// if (path[0] === '$') {
-
-			//     // selector
-			//     path = path.slice(1)
-			//     const selector = this.selectors[path]
-
-			// }
+			if (path[0] === '$') {
+				const [selectorKey, args] = this.parseSelector(path)
+				const { select, affected } = this.selectors[selectorKey](this.getState)
+				const observeKeys: { [key: number]: string } = {}
+				affected.forEach((key, i) => {
+					observeKeys[i] = key
+				})
+				let prevValue = select(...args)
+				const unsub = this.observe(observeKeys, () => {
+					const newValue = select(...args)
+					if (prevValue !== newValue) {
+						prevValue = newValue
+						listener.call(null, newValue)
+					}
+				})
+				return unsub
+			}
 			const [storeKey, keysStr] = path.split('#')
+			const getValue = this.getAccessFunc(keysStr, storeKey)
 			const observable = {
 				type: 0,
-				prevValue: {},
-				getValue: this.getAccessFunc(keysStr, storeKey),
+				prevValue: getValue(),
+				getValue,
 				listener
 			}
 			return this.pushSingleObservable(storeKey, observable)
 		}
 		const allObservables: IObservable[] = []
-		const unsubscribe = Object.keys(path).map(key => {
-			const [storeKey, keysStr] = path[key].split('#')
-			const observable = this.getStoreObservable(
-				storeKey,
-				{
-					key: keysStr
-				},
+		const unsubscribe = Object.keys(path).map(mainKey => {
+			const [storeKey, keysStr] = path[mainKey].split('#')
+			const accessFunc = this.getAccessFunc(keysStr, storeKey)
+			const getValue = () => ({
+				[mainKey]: accessFunc()
+			})
+			const observable = {
+				type: 1,
+				prevValue: getValue(),
+				getValue,
 				listener
-			)
+			}
+			allObservables.push(observable)
 			return this.pushSingleObservable(storeKey, observable)
 		})
+
 		const combinePrevValue = (): any => {
 			const result: { [key: string]: any } = {}
 			allObservables.forEach(observable => {
@@ -188,8 +216,8 @@ export class HostContainer implements IContainer {
 		return action
 	}
 
-	public getState(path: string) {
-		throw new Error('unimplemented')
+	public getState(path: string): any {
+		return this.stores[path].getState()
 	}
 
 	public defineSelectors(selectors: ISelectors) {
