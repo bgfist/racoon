@@ -1,4 +1,4 @@
-import { storeA, storeB, initState } from './stores'
+import { storeA, storeB, initState, setName, setAge } from './stores'
 import { HostContainer } from '../src/host'
 
 const hostContainer = new HostContainer({

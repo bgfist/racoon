@@ -1,5 +1,5 @@
 import { Promise } from 'es6-promise'
-import { IContainer, ICallback, IAction } from './container'
+import { IContainer, ICallback, IAction, IUnObserve, IPath } from './container'
 import { HostContainer } from './host'
 
 export type Messager = (message: string) => void
@@ -9,14 +9,21 @@ export interface IConnection {
 	postMessage: Messager
 }
 
+type MessageType = 'observe' | 'unobserve' | 'change' | 'fetch' | 'feedback' | 'dispatch' | 'error'
+
 interface IMessage {
 	mid: number
-	type: string
+	type: MessageType
 }
 
 interface IObserveMessage extends IMessage {
 	type: 'observe'
-	path: string
+	path: IPath
+}
+
+interface IUnObserveMessage extends IMessage {
+	type: 'unobserve'
+	observeMid: number
 }
 
 interface IChangeMessage extends IMessage {
@@ -34,98 +41,128 @@ interface IFeedbackMessage extends IMessage {
 	value: any
 }
 
-interface IActionMessage extends IMessage {
-	type: 'action'
+interface IDispatchMessage extends IMessage {
+	type: 'dispatch'
 	action: IAction
 }
 
-type Message = IObserveMessage | IChangeMessage | IFetchMessage | IFeedbackMessage | IActionMessage
+interface IErrorMessage extends IMessage {
+	type: 'error'
+	reason: string
+}
+
+type Message = IObserveMessage | IUnObserveMessage | IChangeMessage | IFetchMessage | IFeedbackMessage | IDispatchMessage | IErrorMessage
+
+interface IMessageCallbacks {
+	[mid: number]: ICallback
+}
+
+interface IUnObserveFuncs {
+	[observeMid: number]: IUnObserve
+}
 
 export class ClientContainer implements IContainer {
 	private postMessage: Messager
 	private host?: HostContainer
-	private callbacks: ICallback[]
+	private callbacks: IMessageCallbacks
+	private unobserveFuncs: IUnObserveFuncs
 	private mid: number
 
 	constructor(conn: IConnection, host?: HostContainer) {
 		this.host = host
-		this.callbacks = []
+		this.callbacks = {}
+		this.unobserveFuncs = {}
 		this.mid = 0
 		this.postMessage = conn.postMessage.bind(conn)
 		conn.handleMessage(this.handleMessage)
 	}
 
-	public observe(path: string, callback: ICallback) {
-		const mid = this._genMid()
+	public observe(path: IPath, callback: ICallback) {
+		const mid = this.genMid()
 		const observeMessage: IObserveMessage = { mid, path, type: 'observe' }
 		this.callbacks[mid] = callback
-		this.postMessage(JSON.stringify(observeMessage))
+		this.postMessage(this.pack(observeMessage))
+
 		return () => {
 			delete this.callbacks[mid]
+			const $mid = this.genMid()
+			const unObserveMessage: IUnObserveMessage = { mid: $mid, type: 'unobserve', observeMid: mid }
+			this.postMessage(this.pack(unObserveMessage))
 		}
 	}
 
 	public fetchState(path: string): Promise<any> {
-		const mid = this._genMid()
+		const mid = this.genMid()
 		const fetchMessage: IFetchMessage = { mid, path, type: 'fetch' }
-		this.postMessage(this._pack(fetchMessage))
+		this.postMessage(this.pack(fetchMessage))
 		return new Promise(resolve => {
 			this.callbacks[mid] = (change: any) => resolve(change)
 		})
 	}
 
 	public dispatch(action: IAction) {
-		const mid = this._genMid()
-		const actionMessage: IActionMessage = { mid, action, type: 'action' }
-		this.postMessage(this._pack(actionMessage))
+		const mid = this.genMid()
+		const dispatchMessage: IDispatchMessage = { mid, action, type: 'dispatch' }
+		this.postMessage(this.pack(dispatchMessage))
 	}
 
-	private _genMid() {
+	private genMid() {
 		return this.mid++
 	}
 
-	private _pack(message: Message) {
+	private pack(message: Message) {
 		return JSON.stringify(message)
 	}
 
-	private _unpack(info: string) {
+	private unpack(info: string) {
 		return JSON.parse(info) as Message
 	}
 
-	private _observe(message: IObserveMessage) {
+	private onObserve(message: IObserveMessage) {
 		if (this.host) {
-			const { mid, path } = message
-			this.host.observe(path, value => {
-				const changeMessage: IChangeMessage = { mid, type: 'change', value }
-				this.postMessage(this._pack(changeMessage))
-			})
+			const { mid, path, mid: observeMid } = message
+			try {
+				const unobserve = this.host.observe(path, value => {
+					const changeMessage: IChangeMessage = { mid, type: 'change', value }
+					this.postMessage(this.pack(changeMessage))
+				})
+				this.unobserveFuncs[observeMid] = unobserve
+			} catch (e) {
+				this.error(e.message)
+			}
 		}
 	}
 
-	private _fetchState(message: IFetchMessage) {
-		if (this.host) {
-			const { mid, path } = message
-			const value = this.host.getState(path)
-			const feedbackMessage: IFeedbackMessage = { mid, type: 'feedback', value }
-			this.postMessage(this._pack(feedbackMessage))
+	private onUnobserve(message: IUnObserveMessage) {
+		const { observeMid } = message
+		if (this.unobserveFuncs[observeMid]) {
+			this.unobserveFuncs[observeMid]()
+			delete this.unobserveFuncs[observeMid]
 		}
 	}
 
-	private _dispatch(message: IActionMessage) {
-		if (this.host) {
-			const { action } = message
-			this.host.dispatch(action)
-		}
-	}
-
-	private _onChange(message: IChangeMessage) {
+	private onChange(message: IChangeMessage) {
 		const { mid, value } = message
 		if (this.callbacks[mid]) {
 			this.callbacks[mid](value)
 		}
 	}
 
-	private _onFeedback(message: IFeedbackMessage) {
+	private onFetchState(message: IFetchMessage) {
+		if (this.host) {
+			const { mid, path } = message
+			let value
+			try {
+				value = this.host.getState(path)
+			} catch (e) {
+				this.error(e.message)
+			}
+			const feedbackMessage: IFeedbackMessage = { mid, type: 'feedback', value }
+			this.postMessage(this.pack(feedbackMessage))
+		}
+	}
+
+	private onFeedback(message: IFeedbackMessage) {
 		const { mid, value } = message
 		if (this.callbacks[mid]) {
 			this.callbacks[mid](value)
@@ -133,23 +170,60 @@ export class ClientContainer implements IContainer {
 		}
 	}
 
+	private onDispatch(message: IDispatchMessage) {
+		if (this.host) {
+			const { action } = message
+			try {
+				this.host.dispatch(action)
+			} catch (e) {
+				this.error(e.message)
+			}
+		}
+	}
+
+	private error(reason: string) {
+		const mid = this.genMid()
+		const errorMessage: IErrorMessage = { mid, reason, type: 'error' }
+		this.postMessage(this.pack(errorMessage))
+	}
+
+	private onError(message: IErrorMessage) {
+		throw new Error(message.reason)
+	}
+
 	private handleMessage(info: string) {
-		const message = this._unpack(info)
+		let message
+		try {
+			message = this.unpack(info)
+		} catch (e) {
+			this.error(`消息格式错误: ${e.message}`)
+			return
+		}
 		switch (message.type) {
 			case 'observe':
-				this._observe(message)
+				this.onObserve(message)
+				break
+			case 'unobserve':
+				this.onUnobserve(message)
 				break
 			case 'change':
-				this._onChange(message)
+				this.onChange(message)
 				break
 			case 'fetch':
-				this._fetchState(message)
+				this.onFetchState(message)
 				break
 			case 'feedback':
-				this._onFeedback(message)
+				this.onFeedback(message)
 				break
-			case 'action':
-				this._dispatch(message)
+			case 'dispatch':
+				this.onDispatch(message)
+				break
+			case 'error':
+				this.onError(message)
+				break
+			default:
+				// @ts-ignore
+				this.error(`未知的消息类型${message.type}`)
 				break
 		}
 	}

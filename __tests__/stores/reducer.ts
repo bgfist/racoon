@@ -1,20 +1,7 @@
-import { Reducer } from 'redux'
+import { createHandler } from './util'
+import { setAge, setName, setDelay, setCity, reset, setIdentity } from './action'
 
-export interface IState {
-	name: string
-	age: number
-	locale: {
-		city: string
-		delay: 1
-	}
-}
-
-export interface IAction {
-	type: string
-	payload: any
-}
-
-export const initState: IState = {
+export const initState = {
 	name: 'ExampleName',
 	age: 20,
 	locale: {
@@ -23,43 +10,58 @@ export const initState: IState = {
 	}
 }
 
-export const reducer: Reducer<IState, IAction> = (state: IState = initState, action: IAction): IState => {
-	switch (action.type) {
-		case 'SET_NAME':
-			return {
-				...state,
-				name: action.payload
-			}
-		case 'SET_AGE':
-			return {
-				...state,
-				age: action.payload
-			}
-		case 'SET_DELAY':
-			return {
-				...state,
-				locale: {
-					...state.locale,
-					delay: action.payload
-				}
-			}
-		case 'SET_CITY':
-			return {
-				...state,
-				locale: {
-					...state.locale,
-					city: action.payload
-				}
-			}
-		case 'SET_IDENTITY':
-			return {
-				...state,
-				age: action.payload.age,
-				name: action.payload.name
-			}
-		case 'RESET':
-			return initState
-		default:
-			return state
+const Q = createHandler(initState)
+export const reducer = Q.reducer
+
+Q(setName, (state, name) => {
+	return {
+		...state,
+		name
 	}
-}
+})
+
+Q(setAge, (state, age) => {
+	return {
+		...state,
+		age
+	}
+})
+
+Q(setDelay, (state, delay) => {
+	return {
+		...state,
+		locale: {
+			...state.locale,
+			delay
+		}
+	}
+})
+
+Q(setCity, (state, city) => {
+	return {
+		...state,
+		locale: {
+			...state.locale,
+			city
+		}
+	}
+})
+
+Q(setAge, (state, age) => {
+	return {
+		...state,
+		age
+	}
+})
+
+Q(reset, () => {
+	return initState
+})
+
+Q(setIdentity, (state, { name, age }) => {
+	return {
+		...state,
+		name,
+		age
+	}
+})

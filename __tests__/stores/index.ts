@@ -1,9 +1,11 @@
-import { reducer, IState, IAction, initState } from './reducer'
-import { createStore, Store } from 'redux'
+import { reducer } from './reducer'
+import { createStore } from 'redux'
 
-export const storeA: Store<IState, IAction> = createStore(reducer)
-export const storeB: Store<IState, IAction> = createStore(reducer)
-export function createNewStore(): Store<IState, IAction> {
+export const storeA = createStore(reducer)
+export const storeB = createStore(reducer)
+export function createNewStore() {
 	return createStore(reducer)
 }
-export { IState, IAction, initState }
+
+export * from './action'
+export * from './reducer'
