@@ -1,5 +1,5 @@
 import { Promise } from 'es6-promise'
-import { IContainer, ICallback, IAction, IUnObserve, IPath } from './container'
+import { IContainer, ICallback, IAction, IUnObserve, IPath, IPaths } from './container'
 import { HostContainer } from './host'
 
 export type Messager = (message: string) => void
@@ -77,6 +77,8 @@ export class ClientContainer implements IContainer {
 		conn.handleMessage(this.handleMessage.bind(this))
 	}
 
+	public observe(path: string, callback: ICallback): IUnObserve
+	public observe(path: IPaths, callback: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
 	public observe(path: IPath, callback: ICallback) {
 		const mid = this.genMid()
 		const observeMessage: IObserveMessage = { mid, path, type: 'observe' }
@@ -106,6 +108,13 @@ export class ClientContainer implements IContainer {
 		this.postMessage(this.pack(dispatchMessage))
 	}
 
+	public destory() {
+		this.mid = 0
+		this.callbacks = {}
+		Object.keys(this.unobserveFuncs).forEach((observeMid: any) => this.unobserveFuncs[observeMid]())
+		this.unobserveFuncs = {}
+	}
+
 	private genMid() {
 		return this.mid++
 	}
@@ -122,7 +131,11 @@ export class ClientContainer implements IContainer {
 		if (this.host) {
 			const { mid, path, mid: observeMid } = message
 			try {
-				const unobserve = this.host.observe(path, value => {
+				// 若重复监听，取消之前的
+				if (this.unobserveFuncs[observeMid]) {
+					this.unobserveFuncs[observeMid]()
+				}
+				const unobserve = this.host.observe(path as any, value => {
 					const changeMessage: IChangeMessage = { mid, type: 'change', value }
 					this.postMessage(this.pack(changeMessage))
 				})

@@ -87,6 +87,22 @@ test('dispatch/change', () => {
 	expect(callback).toBeCalledWith('New York')
 })
 
+test('observe multi', () => {
+	const callback = jest.fn().mockName('onChange')
+	clientContainer.observe({ city: 'storeA#locale.city', name: 'storeB#name' }, callback)
+	clientContainer.dispatch({
+		store: 'storeA',
+		...setCity('Beijing')
+	})
+	expect(callback).toBeCalledWith({ city: 'Beijing', name: initState.name })
+	callback.mockClear()
+	clientContainer.dispatch({
+		store: 'storeB',
+		...setName('Jack')
+	})
+	expect(callback).toBeCalledWith({ city: 'Beijing', name: 'Jack' })
+})
+
 test('selector', () => {
 	expect(clientContainer.fetchState('$selectNameAndCity(false)')).resolves.toBe(`${initState.name}-${initState.locale.city}`)
 	expect(clientContainer.fetchState('$selectNameAndCity(true)')).resolves.toBe(`${initState.name}-${initState.locale.city}`.toUpperCase())

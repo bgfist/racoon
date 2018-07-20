@@ -1,5 +1,5 @@
 import { Store } from 'redux'
-import { IContainer, IAction } from './container'
+import { IContainer, IAction, IPath, IPaths, IUnObserve } from './container'
 
 export type Selector = (
 	getState: HostContainer['getState']
@@ -194,7 +194,9 @@ export class HostContainer implements IContainer {
 	 * @param path observe 路径，以 '$' 开头表明为 selector, 若为 Map 则 listener 中接受相关 Map 组合的值
 	 * @param listener 监听器函数, observe 值变化时被调用, 接受 observe 的值
 	 */
-	public observe(path: string | { [key: string]: string }, listener: IListener): Unobserve {
+	public observe(path: string, callback: IListener): IUnObserve
+	public observe(path: IPaths, callback: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
+	public observe(path: IPath, listener: IListener): Unobserve {
 		if (typeof path === 'string') {
 			if (path[0] === '$') {
 				// observe 相同 selector 暂时开两个实例
