@@ -1,121 +1,98 @@
-import { storeA, storeB, initState } from './stores'
+import { createNewStore, initState } from './stores'
 import { HostContainer } from '../src/host'
 
-const hostContainer = new HostContainer({
-	storeA,
-	storeB
+const container = new HostContainer({
+	storeA: createNewStore(),
+	storeB: createNewStore()
 })
+const { dispatch, getState, observe } = container
 
-const { dispatch, getState, observe } = hostContainer
-
-test('basic dispatch', () => {
-	expect(getState('storeA#locale.city')).toBe(initState.locale.city)
-	expect(getState('storeB#name')).toBe(initState.name)
-	dispatch({
-		type: 'SET_NAME',
-		payload: 'B',
-		store: 'storeA'
+describe('basic dispatch', () => {
+	it('get redux store state', () => {
+		expect(container.getState('storeA#locale.city')).toBe(initState.locale.city)
+		expect(container.getState('storeB#name')).toBe(initState.name)
 	})
-	expect(getState('storeA').name).toBe('B')
-	dispatch({
-		type: 'SET_CITY',
-		payload: 'Beijing',
-		store: 'storeB'
-	})
-	expect(getState('storeB').locale.city).toBe('Beijing')
-	dispatch({
-		type: '@@SECRETE',
-		payload: null,
-		store: 'storeA'
-	})
-	expect(getState('storeA')).toEqual({
-		...initState,
-		name: 'B'
+	it('dispatch correctly', () => {
+		dispatch({
+			type: 'SET_NAME',
+			payload: 'Tom',
+			store: 'storeA'
+		})
+		expect(getState('storeA#name')).toBe('Tom')
+		dispatch({
+			type: 'SET_CITY',
+			payload: 'Beijing',
+			store: 'storeB'
+		})
+		expect(getState('storeB#locale.city')).toBe('Beijing')
 	})
 })
 
-test('basic observing shallow keys', () => {
-	let accumulate = 0
-	const setAge = (age: number) =>
+describe('basic observing keys', () => {
+	beforeEach(() => {
+		dispatch({
+			type: 'RESET',
+			payload: null,
+			store: 'storeA'
+		})
+		dispatch({
+			type: 'RESET',
+			payload: null,
+			store: 'storeB'
+		})
+		fn.mockClear()
+	})
+	const fn = jest.fn()
+	const unsub = observe('storeA#age', fn)
+	it('called immediately when observed', () => {
+		observe('storeA#name', fn)()
+		expect(fn).toHaveBeenCalledWith(initState.name)
+	})
+	it('observing deep keys', () => {
+		const cancel = observe('storeA#locale.city', fn)
+		expect(fn).toBeCalledWith(initState.locale.city)
+		dispatch({
+			type: 'SET_CITY',
+			payload: 'Beijing',
+			store: 'storeA'
+		})
+		expect(fn).toBeCalledWith('Beijing')
+		cancel()
+	})
+	it('called when observed value changed', () => {
 		dispatch({
 			type: 'SET_AGE',
-			payload: age,
+			payload: 30,
 			store: 'storeA'
 		})
-	const unsub = observe('storeA#age', age => {
-		accumulate += age
+		expect(fn).toHaveBeenCalledWith(30)
 	})
-	expect(accumulate).toBe(0)
-	// basic
-	setAge(24)
-	expect(accumulate).toBe(24)
-	// lazy calling
-	for (let i = 0; i < 100; i++) {
-		setAge(20)
-	}
-	expect(accumulate).toBe(44)
-	unsub()
-	setAge(50)
-	expect(accumulate).toBe(44)
-})
-
-test('basic observing deep keys', () => {
-	let accumulate = 0
-	const setDelay = (delay: number) =>
+	it('lazy calling', () => {
+		for (let i = 0; i < 10; i++) {
+			dispatch({
+				type: 'SET_AGE',
+				payload: 30,
+				store: 'storeA'
+			})
+		}
+		expect(fn).toHaveBeenCalledTimes(1)
+	})
+	it('unsuscribe', () => {
+		unsub()
+		expect(fn).not.toBeCalled()
+	})
+	it('when called correctly', () => {
 		dispatch({
-			type: 'SET_DELAY',
-			payload: delay,
+			type: 'SET_NAME',
+			payload: 'Tony',
 			store: 'storeA'
 		})
-	const unsub = observe('storeA#locale.delay', delay => {
-		accumulate += delay
+		expect(fn).not.toBeCalled()
+		dispatch({
+			type: 'SET_AGE',
+			payload: 10,
+			store: 'storeB'
+		})
+		expect(fn).not.toBeCalled()
 	})
-	expect(accumulate).toBe(0)
-	setDelay(24)
-	expect(accumulate).toBe(24)
-	for (let i = 0; i < 100; i++) {
-		setDelay(20)
-	}
-	expect(accumulate).toBe(44)
-	unsub()
-	setDelay(50)
-	expect(accumulate).toBe(44)
-})
-
-test('when listener is called correctly', () => {
-	let called = false
-	const unsub = observe('storeA#name', () => {
-		called = true
-	})
-	dispatch({
-		type: 'SET_AGE',
-		payload: 10,
-		store: 'storeA'
-	})
-	expect(called).toBe(false)
-	dispatch({
-		type: 'SET_DELAY',
-		payload: 20,
-		store: 'storeA'
-	})
-	expect(called).toBe(false)
-	dispatch({
-		type: '@@SECRETE',
-		payload: null,
-		store: 'storeA'
-	})
-	expect(called).toBe(false)
-	dispatch({
-		type: 'SET_NAME',
-		payload: 'name',
-		store: 'storeB'
-	})
-	expect(called).toBe(false)
-	dispatch({
-		type: 'SET_NAME',
-		payload: 'new name',
-		store: 'storeA'
-	})
-	expect(called).toBe(true)
-	unsub()
 })

@@ -7,6 +7,7 @@ const hostContainer = new HostContainer({
 })
 
 const { dispatch, getState, observe } = hostContainer
+const fn = jest.fn()
 
 describe.only('basic selector observer', () => {
 	hostContainer.defineSelectors({
@@ -18,9 +19,13 @@ describe.only('basic selector observer', () => {
 			affected: ['storeA#age', 'storeA#name']
 		})
 	})
-	const desc: string[] = []
-	const unsub = observe('$computedDescribe("-")', currentDescribe => {
-		desc.unshift(currentDescribe)
+	const unsub = observe('$computedDescribe("-")', fn)
+	beforeEach(() => {
+		fn.mockClear()
+	})
+	it('called immediately', () => {
+		observe('$computedDescribe("-")', fn)()
+		expect(fn).toHaveBeenCalledTimes(1)
 	})
 	it('called when on key changed', () => {
 		dispatch({
@@ -28,13 +33,15 @@ describe.only('basic selector observer', () => {
 			payload: 23,
 			store: 'storeA'
 		})
-		expect(desc[0]).toBe(`${initState.name}-23`)
+		expect(fn).toHaveBeenCalledWith(`${initState.name}-23`)
 		dispatch({
 			type: 'SET_NAME',
 			payload: 'newName',
 			store: 'storeA'
 		})
-		expect(desc[0]).toBe('newName-23')
+		expect(fn).toHaveBeenCalledWith('newName-23')
+	})
+	it('only called once when multiple observing-values changed', () => {
 		dispatch({
 			type: 'SET_IDENTITY',
 			payload: {
@@ -43,16 +50,35 @@ describe.only('basic selector observer', () => {
 			},
 			store: 'storeA'
 		})
-		expect(desc[0]).toBe('Henrry-40')
-		expect(desc.length).toBe(3)
+		expect(fn).toHaveBeenCalledTimes(1)
 	})
 	it('lazy calling', () => {
 		dispatch({
 			type: 'SET_AGE',
-			payload: 40,
+			payload: getState('storeA#age'),
 			store: 'storeA'
 		})
-		expect(desc.length).toBe(3)
+		expect(fn).not.toHaveBeenCalled()
+	})
+	it('computed lazy calling', () => {
+		dispatch({
+			type: 'SET_IDENTITY',
+			payload: {
+				name: '0-1',
+				age: '2-3'
+			},
+			store: 'storeA'
+		})
+		expect(fn).toBeCalledWith('0-1-2-3')
+		dispatch({
+			type: 'SET_IDENTITY',
+			payload: {
+				name: '0-1-2',
+				age: 3
+			},
+			store: 'storeA'
+		})
+		expect(fn).toHaveBeenCalledTimes(1)
 	})
 	it("shouldn't called when unconcerned key-value changed", () => {
 		dispatch({
@@ -60,7 +86,7 @@ describe.only('basic selector observer', () => {
 			payload: null,
 			store: 'storeA'
 		})
-		expect(desc[0]).toBe('Henrry-40')
+		expect(fn).not.toHaveBeenCalled()
 	})
 	it('unsubscibe', () => {
 		unsub()
@@ -72,7 +98,6 @@ describe.only('basic selector observer', () => {
 			},
 			store: 'storeA'
 		})
-		expect(desc[0]).toBe('Henrry-40')
-		expect(desc.length).toBe(3)
+		expect(fn).not.toHaveBeenCalled()
 	})
 })

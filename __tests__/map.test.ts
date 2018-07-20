@@ -6,41 +6,54 @@ const hostContainer = new HostContainer({
 	storeB
 })
 const { dispatch, getState, observe } = hostContainer
+const fn = jest.fn()
+
+beforeEach(() => {
+	dispatch({
+		type: 'RESET',
+		payload: null,
+		store: 'storeA'
+	})
+	dispatch({
+		type: 'RESET',
+		payload: null,
+		store: 'storeB'
+	})
+})
 
 describe('basic single store map observer', () => {
-	const values = []
+	beforeEach(() => {
+		fn.mockClear()
+	})
 	const unsub = observe(
 		{
 			name: 'storeA#name',
 			age: 'storeA#age'
 		},
-		value => {
-			values.unshift(value)
-		}
+		fn
 	)
+	it('called immediately', () => {
+		observe(
+			{
+				name: 'storeA#name',
+				age: 'storeA#age'
+			},
+			fn
+		)()
+		expect(fn).toHaveBeenCalled()
+	})
 	it('modify one key', () => {
 		dispatch({
 			type: 'SET_NAME',
-			payload: 'newName',
+			payload: 'Tom',
 			store: 'storeA'
 		})
-		expect(values[0]).toEqual({
-			name: 'newName',
+		expect(fn).toBeCalledWith({
+			name: 'Tom',
 			age: initState.age
 		})
 	})
-	it('modify another key', () => {
-		dispatch({
-			type: 'SET_AGE',
-			payload: 29,
-			store: 'storeA'
-		})
-		expect(values[0]).toEqual({
-			name: 'newName',
-			age: 29
-		})
-	})
-	it('modify both, run only once', () => {
+	it('modify multiple value once, run one time', () => {
 		dispatch({
 			type: 'SET_IDENTITY',
 			payload: {
@@ -49,19 +62,15 @@ describe('basic single store map observer', () => {
 			},
 			store: 'storeA'
 		})
-		expect(values[0]).toEqual({
-			name: 'Tom',
-			age: 40
-		})
-		expect(values.length).toBe(3)
+		expect(fn).toHaveBeenCalledTimes(1)
 	})
 	it('lazy calling', () => {
 		dispatch({
 			type: 'SET_AGE',
-			payload: 40,
+			payload: initState.age,
 			store: 'storeA'
 		})
-		expect(values.length).toBe(3)
+		expect(fn).not.toHaveBeenCalled()
 	})
 	it('unsubscribe', () => {
 		unsub()
@@ -73,20 +82,20 @@ describe('basic single store map observer', () => {
 			},
 			store: 'storeA'
 		})
-		expect(values.length).toBe(3)
+		expect(fn).not.toHaveBeenCalled()
 	})
 })
 
 describe('cross container observer', () => {
-	const values = []
+	beforeEach(() => {
+		fn.mockClear()
+	})
 	const unsub = observe(
 		{
 			name: 'storeB#name',
 			city: 'storeA#locale.city'
 		},
-		value => {
-			values.unshift(value)
-		}
+		fn
 	)
 	it('modify deep key', () => {
 		dispatch({
@@ -94,12 +103,10 @@ describe('cross container observer', () => {
 			payload: 'Beijing',
 			store: 'storeA'
 		})
-		expect(values[0]).toEqual({
+		expect(fn).toHaveBeenCalledWith({
 			name: initState.name,
 			city: 'Beijing'
 		})
-		expect(hostContainer.getState('storeB#name')).toBe(initState.name)
-		expect(values.length).toBe(1)
 	})
 	it('unsubscribe', () => {
 		unsub()
@@ -108,6 +115,6 @@ describe('cross container observer', () => {
 			payload: 'Kyo',
 			store: 'storeB'
 		})
-		expect(values.length).toBe(1)
+		expect(fn).not.toHaveBeenCalled()
 	})
 })

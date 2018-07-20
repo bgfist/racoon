@@ -123,15 +123,22 @@ export class HostContainer implements IContainer {
 	}
 
 	private getAccessFunc(storeKey: string, keysStr: string | undefined): () => any {
+		if (!this.stores[storeKey]) {
+			throw new TypeError(`未找到 ${storeKey} 的 store`)
+		}
 		if (!keysStr) {
 			return () => this.stores[storeKey].getState()
 		}
 		const keys = keysStr.split('.')
 		return () => {
 			let value: any = this.stores[storeKey].getState()
-			keys.forEach(key => {
-				value = value[key]
-			})
+			try {
+				keys.forEach(key => {
+					value = value[key]
+				})
+			} catch (e) {
+				value = undefined
+			}
 			return value
 		}
 	}
@@ -162,19 +169,23 @@ export class HostContainer implements IContainer {
 				affected.forEach((key, i) => {
 					observeKeys[i] = key
 				})
-				let prevValue = select.apply(null, args)
+
+				// 确保 newValue 与此不等以此保证第一次 listener 被调用
+				let prevSelectedValue: any = NaN
 				return this.observe(observeKeys, () => {
 					const newValue = select.apply(null, args)
-					if (prevValue !== newValue) {
-						prevValue = newValue
+					if (prevSelectedValue !== newValue) {
+						prevSelectedValue = newValue
 						listener.call(null, newValue)
 					}
 				})
 			}
 			const [storeKey, keysStr] = path.split('#')
 			const getValue = this.getAccessFunc(storeKey, keysStr)
+			const prevValue = getValue()
+			listener.call(null, prevValue)
 			const observable = {
-				prevValue: getValue(),
+				prevValue,
 				getValue,
 				listener
 			}
@@ -206,6 +217,7 @@ export class HostContainer implements IContainer {
 			})
 			return result
 		}
+		listener.call(null, combinePrevValue())
 		allObservables.forEach(observable => (observable.combinePrevValue = combinePrevValue))
 		return () => unsubscribe.forEach(fn => fn())
 	}
