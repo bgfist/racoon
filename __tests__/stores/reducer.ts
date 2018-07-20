@@ -47,13 +47,6 @@ Q(setCity, (state, city) => {
 	}
 })
 
-Q(setAge, (state, age) => {
-	return {
-		...state,
-		age
-	}
-})
-
 Q(reset, () => {
 	return initState
 })

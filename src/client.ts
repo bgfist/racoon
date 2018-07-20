@@ -73,8 +73,8 @@ export class ClientContainer implements IContainer {
 		this.callbacks = {}
 		this.unobserveFuncs = {}
 		this.mid = 0
-		this.postMessage = conn.postMessage.bind(conn)
-		conn.handleMessage(this.handleMessage)
+		this.postMessage = conn.postMessage
+		conn.handleMessage(this.handleMessage.bind(this))
 	}
 
 	public observe(path: IPath, callback: ICallback) {
@@ -128,7 +128,7 @@ export class ClientContainer implements IContainer {
 				})
 				this.unobserveFuncs[observeMid] = unobserve
 			} catch (e) {
-				this.error(e.message)
+				this.error(`hostContainer.observe: ${e.message}`)
 			}
 		}
 	}
@@ -155,7 +155,7 @@ export class ClientContainer implements IContainer {
 			try {
 				value = this.host.getState(path)
 			} catch (e) {
-				this.error(e.message)
+				this.error(`hostContainer.getState: ${e.message}`)
 			}
 			const feedbackMessage: IFeedbackMessage = { mid, type: 'feedback', value }
 			this.postMessage(this.pack(feedbackMessage))
@@ -176,7 +176,7 @@ export class ClientContainer implements IContainer {
 			try {
 				this.host.dispatch(action)
 			} catch (e) {
-				this.error(e.message)
+				this.error(`hostContainer.dispatch: ${e.message}`)
 			}
 		}
 	}
@@ -196,7 +196,7 @@ export class ClientContainer implements IContainer {
 		try {
 			message = this.unpack(info)
 		} catch (e) {
-			this.error(`消息格式错误: ${e.message}`)
+			this.error(`clientContainer: 消息格式错误: ${info} --- ${e.message}`)
 			return
 		}
 		switch (message.type) {
@@ -223,7 +223,7 @@ export class ClientContainer implements IContainer {
 				break
 			default:
 				// @ts-ignore
-				this.error(`未知的消息类型${message.type}`)
+				this.error(`clientContainer: 未知的消息类型: ${message.type}`)
 				break
 		}
 	}

@@ -1,7 +1,7 @@
 export interface IAction {
 	type: string
 	store: string
-	payload: any
+	payload?: any
 }
 
 export type ICallback = (change: any) => void

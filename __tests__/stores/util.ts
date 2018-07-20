@@ -3,7 +3,7 @@ type Handler<Params, State> = (state: State, payload: Params) => State | AnyFuc
 type Action<Params> = (payload: Params) => any
 interface IAction {
 	type: string
-	payload: any
+	payload?: any
 }
 
 interface IHandlerManager<State> {
@@ -11,8 +11,10 @@ interface IHandlerManager<State> {
 	<Params>(action: Action<Params>, handler: Handler<Params, State>): void
 }
 
+export function createAction(type: string): () => { type: string }
+export function createAction<T>(type: string): (payload: T) => { type: string; payload: any }
 export function createAction<T = any>(type: string) {
-	const creator = (payload: T) => {
+	const creator = (payload?: T) => {
 		return {
 			type,
 			payload
