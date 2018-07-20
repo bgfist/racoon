@@ -1,5 +1,5 @@
 {
-	"name": "racoon",
+	"name": "@shimo/racoon",
 	"version": "1.0.0",
 	"description": "owl data management center",
 	"publishConfig": {
