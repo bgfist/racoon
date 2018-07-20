@@ -88,8 +88,8 @@ test('dispatch/change', () => {
 })
 
 test('selector', () => {
-	// expect(clientContainer.fetchState('$selectNameAndCity(false)')).resolves.toBe(`${initState.name}-${initState.locale.city}`)
-	// expect(clientContainer.fetchState('$selectNameAndCity(true)')).resolves.toBe(`${initState.name}-${initState.locale.city}`.toUpperCase())
+	expect(clientContainer.fetchState('$selectNameAndCity(false)')).resolves.toBe(`${initState.name}-${initState.locale.city}`)
+	expect(clientContainer.fetchState('$selectNameAndCity(true)')).resolves.toBe(`${initState.name}-${initState.locale.city}`.toUpperCase())
 
 	const callback = jest.fn().mockName('onChange')
 	clientContainer.observe('$selectNameAndCity()', callback)

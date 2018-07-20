@@ -42,11 +42,15 @@ function arrayFind<T>(arr: T[], fn: (item: T) => boolean): T | undefined {
 	}
 	return undefined
 }
+function has(obj: object, key: string): boolean {
+	return Object.prototype.hasOwnProperty.call(obj, key)
+}
 
 export class HostContainer implements IContainer {
 	private stores: IStores
 	private observables: { [storeKey: string]: IObservable[] } = {}
 	private selectors: ISelectors = {}
+	private selectorValues: { [observeSelector: string]: any } = {}
 	private executeJobs: IExecuteJob[] = []
 
 	constructor(stores: IStores) {
@@ -132,6 +136,7 @@ export class HostContainer implements IContainer {
 		const keys = keysStr.split('.')
 		return () => {
 			let value: any = this.stores[storeKey].getState()
+			// 未取到的 key 全部返回 undefined
 			try {
 				keys.forEach(key => {
 					value = value[key]
@@ -147,22 +152,35 @@ export class HostContainer implements IContainer {
 	 * 返回解析后的 selector 和 传入参数
 	 * @param path observe 的 selector 路径，包含标识符 '$'
 	 */
-	private parseSelector(path: string): [string, string[]] {
+	private parseSelector(path: string): [string, any[]] {
 		path = path.slice(1).trim()
-		const [, selector, argStr] = path.match(/^(\w+)\((.*)\)$/) as RegExpMatchArray
-		const args = argStr.split(',').map(s => {
-			s = s.trim()
-			if ((s[0] === '"' && s[s.length - 1] === '"') || (s[0] === "'" && s[s.length - 1] === "'")) {
-				return s.slice(1, -1)
-			}
-			return s
-		})
+		if (!/\(.*\)/.test(path)) {
+			throw new TypeError('selector 中必须为执行表达式')
+		}
+		let selector = ''
+		let argStr = ''
+		// const [, selector, argStr] = path.match(/^(\w+)\((.*)\)$/) as RegExpMatchArray
+		try {
+			const matchArr = path.match(/^(\w+)\((.*)\)$/) as RegExpMatchArray
+			selector = matchArr[1]
+			argStr = matchArr[2]
+		} catch (e) {
+			throw new TypeError(`无法解析的 selector: $${path}`)
+		}
+		let args = []
+		// 参数解析策略暂时是只能用 JSON 解析
+		try {
+			args = JSON.parse(`[${argStr}]`)
+		} catch (e) {
+			throw new TypeError(`不能转为 JSON 的 selector 参数: ${argStr}`)
+		}
 		return [selector, args]
 	}
 
 	public observe(path: string | { [key: string]: string }, listener: IListener): () => void {
 		if (typeof path === 'string') {
 			if (path[0] === '$') {
+				// observe 相同 selector 暂时开两个实例
 				const [selectorKey, args] = this.parseSelector(path)
 				const { select, affected } = this.selectors[selectorKey](this.getState)
 				const observeKeys: { [key: number]: string } = {}
@@ -171,11 +189,11 @@ export class HostContainer implements IContainer {
 				})
 
 				// 确保 newValue 与此不等以此保证第一次 listener 被调用
-				let prevSelectedValue: any = NaN
+				this.selectorValues[path] = NaN
 				return this.observe(observeKeys, () => {
 					const newValue = select.apply(null, args)
-					if (prevSelectedValue !== newValue) {
-						prevSelectedValue = newValue
+					if (this.selectorValues[path] !== newValue) {
+						this.selectorValues[path] = newValue
 						listener.call(null, newValue)
 					}
 				})
@@ -229,6 +247,16 @@ export class HostContainer implements IContainer {
 	}
 
 	public getState(path: string): any {
+		if (path[0] === '$') {
+			if (!has(this.selectorValues, path)) {
+				let data = null
+				this.observe(path, computed => {
+					data = computed
+				})()
+				return data
+			}
+			return this.selectorValues[path]
+		}
 		const [storeKey, keysStr] = path.split('#')
 		return this.getAccessFunc(storeKey, keysStr)()
 	}

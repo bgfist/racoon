@@ -21,11 +21,39 @@ describe.only('basic selector observer', () => {
 	})
 	const unsub = observe('$computedDescribe("-")', fn)
 	beforeEach(() => {
+		dispatch({
+			type: 'RESET',
+			payload: null,
+			store: 'storeA'
+		})
+		dispatch({
+			type: 'RESET',
+			payload: null,
+			store: 'storeB'
+		})
 		fn.mockClear()
 	})
 	it('called immediately', () => {
 		observe('$computedDescribe("-")', fn)()
 		expect(fn).toHaveBeenCalledTimes(1)
+	})
+	it('get selector state', () => {
+		expect(getState('$computedDescribe("-")')).toBe(`${initState.name}-${initState.age}`)
+	})
+	it('observe one selector', () => {
+		const fn2 = jest.fn()
+		dispatch({
+			type: 'SET_IDENTITY',
+			payload: {
+				name: 'Henrry',
+				age: 40
+			},
+			store: 'storeA'
+		})
+		fn.mockClear()
+		observe('$computedDescribe("-")', fn2)()
+		expect(fn).not.toHaveBeenCalled()
+		expect(fn2).toHaveBeenCalledWith(`Henrry-40`)
 	})
 	it('called when on key changed', () => {
 		dispatch({
