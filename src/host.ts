@@ -1,8 +1,6 @@
 import { Store } from 'redux'
 import { IContainer, IAction } from './container'
 
-export { Store }
-
 export type Selector = (
 	getState: HostContainer['getState']
 ) => {
@@ -15,7 +13,7 @@ export interface ISelectors {
 }
 
 export interface IStores {
-	[k: string]: Store
+	[k: string]: Store<any, any>
 }
 
 export type IListener = (newValue: any) => void
