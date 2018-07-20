@@ -1,12 +1,13 @@
-import { storeA, storeB, initState } from './stores'
+import { storeA, storeB, initState, setDelay } from './stores'
 import { HostContainer } from '../src/host'
+import { setName, setCity, reset, setAge, StoreType, createTester, setIdentity } from './stores/createHostTester'
 
 const hostContainer = new HostContainer({
 	storeA,
 	storeB
 })
 
-const { dispatch, getState, observe } = hostContainer
+const { dispatch, getState, observe } = createTester(hostContainer)
 const fn = jest.fn()
 
 describe.only('basic selector observer', () => {
@@ -21,16 +22,8 @@ describe.only('basic selector observer', () => {
 	})
 	const unsub = observe('$computedDescribe("-")', fn)
 	beforeEach(() => {
-		dispatch({
-			type: 'RESET',
-			payload: null,
-			store: 'storeA'
-		})
-		dispatch({
-			type: 'RESET',
-			payload: null,
-			store: 'storeB'
-		})
+		dispatch(reset())
+		dispatch(reset(), StoreType.B)
 		fn.mockClear()
 	})
 	it('called immediately', () => {
@@ -42,50 +35,34 @@ describe.only('basic selector observer', () => {
 	})
 	it('observe one selector', () => {
 		const fn2 = jest.fn()
-		dispatch({
-			type: 'SET_IDENTITY',
-			payload: {
+		dispatch(
+			setIdentity({
 				name: 'Henrry',
 				age: 40
-			},
-			store: 'storeA'
-		})
+			})
+		)
 		fn.mockClear()
 		observe('$computedDescribe("-")', fn2)()
 		expect(fn).not.toHaveBeenCalled()
 		expect(fn2).toHaveBeenCalledWith(`Henrry-40`)
 	})
 	it('called when on key changed', () => {
-		dispatch({
-			type: 'SET_AGE',
-			payload: 23,
-			store: 'storeA'
-		})
+		dispatch(setAge(23))
 		expect(fn).toHaveBeenCalledWith(`${initState.name}-23`)
-		dispatch({
-			type: 'SET_NAME',
-			payload: 'newName',
-			store: 'storeA'
-		})
-		expect(fn).toHaveBeenCalledWith('newName-23')
+		dispatch(setName('Marry'))
+		expect(fn).toHaveBeenCalledWith('Marry-23')
 	})
 	it('only called once when multiple observing-values changed', () => {
-		dispatch({
-			type: 'SET_IDENTITY',
-			payload: {
+		dispatch(
+			setIdentity({
 				name: 'Henrry',
 				age: 40
-			},
-			store: 'storeA'
-		})
+			})
+		)
 		expect(fn).toHaveBeenCalledTimes(1)
 	})
 	it('lazy calling', () => {
-		dispatch({
-			type: 'SET_AGE',
-			payload: getState('storeA#age'),
-			store: 'storeA'
-		})
+		dispatch(setAge(initState.age))
 		expect(fn).not.toHaveBeenCalled()
 	})
 	it('computed lazy calling', () => {
@@ -98,6 +75,7 @@ describe.only('basic selector observer', () => {
 			store: 'storeA'
 		})
 		expect(fn).toBeCalledWith('0-1-2-3')
+		fn.mockClear()
 		dispatch({
 			type: 'SET_IDENTITY',
 			payload: {
@@ -106,26 +84,37 @@ describe.only('basic selector observer', () => {
 			},
 			store: 'storeA'
 		})
-		expect(fn).toHaveBeenCalledTimes(1)
+		expect(fn).toHaveBeenCalledTimes(0)
 	})
 	it("shouldn't called when unconcerned key-value changed", () => {
-		dispatch({
-			type: 'SET_DELAY',
-			payload: null,
-			store: 'storeA'
-		})
+		dispatch(setDelay(getState('storeA#locale.delay') + 10))
 		expect(fn).not.toHaveBeenCalled()
+	})
+	it('useful error message', () => {
+		expect(() => {
+			observe('$computedDescribe', fn)
+		}).toThrow('selector 中必须为执行表达式')
+		expect(() => {
+			observe('$(true)', fn)
+		}).toThrow('无法解析的 selector: $(true)')
+		expect(() => {
+			observe('$computedDescribe(true)rr', fn)
+		}).toThrow('无法解析的 selector: $computedDescribe(true)rr')
+		expect(() => {
+			observe('$computedDescrib("-")', fn)
+		}).toThrow('未被注册的 selector: computedDescrib')
+		expect(() => {
+			observe('$computedDescribe(["1", 1, \'1\'])', fn)
+		}).toThrow('不能转为 JSON 的 selector 参数: ["1", 1, \'1\']')
 	})
 	it('unsubscibe', () => {
 		unsub()
-		dispatch({
-			type: 'SET_IDENTITY',
-			payload: {
+		dispatch(
+			setIdentity({
 				name: 'Marry',
 				age: 25
-			},
-			store: 'storeA'
-		})
+			})
+		)
 		expect(fn).not.toHaveBeenCalled()
 	})
 })

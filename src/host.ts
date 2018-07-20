@@ -18,6 +18,8 @@ export interface IStores {
 
 export type IListener = (newValue: any) => void
 
+export type Unobserve = () => void
+
 interface IObservable {
 	prevValue: any
 	getValue: () => any
@@ -86,24 +88,20 @@ export class HostContainer implements IContainer {
 								fn: observable.listener
 							})
 						} else {
-							/**
-							 * TODO: 这部分可优化
-							 */
-							const combinedPrevValue = (observable.combinePrevValue as () => any)()
-							const combinedNewValue: { [key: string]: any } = {}
-							Object.keys(combinedPrevValue).forEach(k => {
-								combinedNewValue[k] = combinedPrevValue[k]
-							})
-							Object.keys(newValue).forEach(k => {
-								combinedNewValue[k] = newValue[k]
-							})
 							const targetJob = arrayFind<IExecuteJob>(this.executeJobs, job => job.fn === observable.listener)
 							if (targetJob) {
-								targetJob.newValue = combinedNewValue
+								targetJob.newValue = {
+									...targetJob.newValue,
+									...newValue
+								}
 							} else {
+								const prevValue = observable.combinePrevValue()
 								this.executeJobs.push({
-									newValue: combinedNewValue,
-									prevValue: combinedPrevValue,
+									newValue: {
+										...prevValue,
+										...newValue
+									},
+									prevValue,
 									fn: observable.listener
 								})
 							}
@@ -117,17 +115,33 @@ export class HostContainer implements IContainer {
 		})
 	}
 
-	private pushSingleObservable(storeKey: string, observable: IObservable): () => void {
+	private pushSingleObservable(storeKey: string, observable: IObservable): Unobserve {
 		this.observables[storeKey].push(observable)
 		return () => {
 			this.observables[storeKey] = this.observables[storeKey].filter(o => o !== observable)
+			// observable = null
 		}
 	}
 
-	private getAccessFunc(storeKey: string, keysStr: string | undefined): () => any {
-		if (!this.stores[storeKey]) {
-			throw new TypeError(`未找到 ${storeKey} 的 store`)
+	private checkSelectorKey(key: string): void {
+		if (!has(this.selectors, key)) {
+			throw new TypeError(`未被注册的 selector: ${key}`)
 		}
+	}
+
+	private checkStoreKey(key: string): void {
+		if (!this.stores[key]) {
+			throw new TypeError(`未找到名为 ${key} 的 store`)
+		}
+	}
+
+	/**
+	 * 获取返回某个 store 上特定路径的值的函数
+	 * @param storeKey 目标 store 的 key
+	 * @param keysStr 获取路径，以 '.' 分隔
+	 */
+	private getAccessFunc(storeKey: string, keysStr: string | undefined): () => any {
+		this.checkStoreKey(storeKey)
 		if (!keysStr) {
 			return () => this.stores[storeKey].getState()
 		}
@@ -175,11 +189,17 @@ export class HostContainer implements IContainer {
 		return [selector, args]
 	}
 
-	public observe(path: string | { [key: string]: string }, listener: IListener): () => void {
+	/**
+	 *
+	 * @param path observe 路径，以 '$' 开头表明为 selector, 若为 Map 则 listener 中接受相关 Map 组合的值
+	 * @param listener 监听器函数, observe 值变化时被调用, 接受 observe 的值
+	 */
+	public observe(path: string | { [key: string]: string }, listener: IListener): Unobserve {
 		if (typeof path === 'string') {
 			if (path[0] === '$') {
 				// observe 相同 selector 暂时开两个实例
 				const [selectorKey, args] = this.parseSelector(path)
+				this.checkSelectorKey(selectorKey)
 				const { select, affected } = this.selectors[selectorKey](this.getState)
 				const observeKeys: { [key: number]: string } = {}
 				affected.forEach((key, i) => {
@@ -238,20 +258,27 @@ export class HostContainer implements IContainer {
 		return () => unsubscribe.forEach(fn => fn())
 	}
 
-	public dispatch(action: IAction) {
+	/**
+	 * 与 redux 的 dispatch 相似
+	 * @param action store 字段为目标 dispatch 的 store
+	 */
+	public dispatch(action: IAction): void {
 		const { type, store, payload } = action
+		this.checkStoreKey(store)
 		this.stores[store].dispatch({ type, payload })
-		return action
 	}
 
+	/**
+	 * 获取某个 store 上或某个 selector 的值
+	 * @param path 以 '$' 开头为 selector 路径
+	 */
 	public getState(path: string): any {
 		if (path[0] === '$') {
 			if (!has(this.selectorValues, path)) {
-				let data = null
-				this.observe(path, computed => {
-					data = computed
-				})()
-				return data
+				const [selectorKey, args] = this.parseSelector(path)
+				this.checkSelectorKey(selectorKey)
+				const { select } = this.selectors[selectorKey](this.getState)
+				return select.apply(null, args)
 			}
 			return this.selectorValues[path]
 		}
@@ -259,7 +286,11 @@ export class HostContainer implements IContainer {
 		return this.getAccessFunc(storeKey, keysStr)()
 	}
 
-	public defineSelectors(selectors: ISelectors) {
+	/**
+	 * 注册 selector 工厂函数
+	 * @param selectors
+	 */
+	public defineSelectors(selectors: ISelectors): void {
 		this.selectors = {
 			...this.selectors,
 			...selectors

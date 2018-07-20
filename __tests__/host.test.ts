@@ -1,11 +1,12 @@
 import { createNewStore, initState } from './stores'
 import { HostContainer } from '../src/host'
+import { setName, setCity, reset, setAge, StoreType, createTester } from './stores/createHostTester'
 
 const container = new HostContainer({
 	storeA: createNewStore(),
 	storeB: createNewStore()
 })
-const { dispatch, getState, observe } = container
+const { dispatch, observe, getState } = createTester(container)
 
 describe('basic dispatch', () => {
 	it('get redux store state', () => {
@@ -13,33 +14,17 @@ describe('basic dispatch', () => {
 		expect(container.getState('storeB#name')).toBe(initState.name)
 	})
 	it('dispatch correctly', () => {
-		dispatch({
-			type: 'SET_NAME',
-			payload: 'Tom',
-			store: 'storeA'
-		})
+		dispatch(setName('Tom'))
 		expect(getState('storeA#name')).toBe('Tom')
-		dispatch({
-			type: 'SET_CITY',
-			payload: 'Beijing',
-			store: 'storeB'
-		})
+		dispatch(setCity('Beijing'), StoreType.B)
 		expect(getState('storeB#locale.city')).toBe('Beijing')
 	})
 })
 
 describe('basic observing keys', () => {
 	beforeEach(() => {
-		dispatch({
-			type: 'RESET',
-			payload: null,
-			store: 'storeA'
-		})
-		dispatch({
-			type: 'RESET',
-			payload: null,
-			store: 'storeB'
-		})
+		dispatch(reset())
+		dispatch(reset(), StoreType.B)
 		fn.mockClear()
 	})
 	const fn = jest.fn()
@@ -51,29 +36,17 @@ describe('basic observing keys', () => {
 	it('observing deep keys', () => {
 		const cancel = observe('storeA#locale.city', fn)
 		expect(fn).toBeCalledWith(initState.locale.city)
-		dispatch({
-			type: 'SET_CITY',
-			payload: 'Beijing',
-			store: 'storeA'
-		})
+		dispatch(setCity('Beijing'))
 		expect(fn).toBeCalledWith('Beijing')
 		cancel()
 	})
 	it('called when observed value changed', () => {
-		dispatch({
-			type: 'SET_AGE',
-			payload: 30,
-			store: 'storeA'
-		})
+		dispatch(setAge(30))
 		expect(fn).toHaveBeenCalledWith(30)
 	})
 	it('lazy calling', () => {
 		for (let i = 0; i < 10; i++) {
-			dispatch({
-				type: 'SET_AGE',
-				payload: 30,
-				store: 'storeA'
-			})
+			dispatch(setAge(30))
 		}
 		expect(fn).toHaveBeenCalledTimes(1)
 	})
@@ -82,17 +55,24 @@ describe('basic observing keys', () => {
 		expect(fn).not.toBeCalled()
 	})
 	it('when called correctly', () => {
-		dispatch({
-			type: 'SET_NAME',
-			payload: 'Tony',
-			store: 'storeA'
-		})
+		dispatch(setName('Tony'))
 		expect(fn).not.toBeCalled()
-		dispatch({
-			type: 'SET_AGE',
-			payload: 10,
-			store: 'storeB'
-		})
+		dispatch(setAge(10))
 		expect(fn).not.toBeCalled()
+	})
+	describe('useful error messages', () => {
+		it('dispatch none-exist store', () => {
+			expect(() => {
+				container.dispatch({
+					...setAge(10),
+					store: 'storeC'
+				})
+			}).toThrow('未找到名为 storeC 的 store')
+		})
+		it('getState from none-exist store', () => {
+			expect(() => {
+				getState('storeC')
+			}).toThrow('未找到名为 storeC 的 store')
+		})
 	})
 })

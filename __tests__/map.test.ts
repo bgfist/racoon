@@ -1,24 +1,17 @@
-import { storeA, storeB, initState, setName, setAge } from './stores'
+import { storeA, storeB, initState } from './stores'
 import { HostContainer } from '../src/host'
+import { setName, setCity, reset, setAge, StoreType, createTester, setIdentity } from './stores/createHostTester'
 
 const hostContainer = new HostContainer({
 	storeA,
 	storeB
 })
-const { dispatch, getState, observe } = hostContainer
+const { dispatch, getState, observe } = createTester(hostContainer)
 const fn = jest.fn()
 
 beforeEach(() => {
-	dispatch({
-		type: 'RESET',
-		payload: null,
-		store: 'storeA'
-	})
-	dispatch({
-		type: 'RESET',
-		payload: null,
-		store: 'storeB'
-	})
+	dispatch(reset())
+	dispatch(reset(), StoreType.B)
 })
 
 describe('basic single store map observer', () => {
@@ -43,45 +36,33 @@ describe('basic single store map observer', () => {
 		expect(fn).toHaveBeenCalled()
 	})
 	it('modify one key', () => {
-		dispatch({
-			type: 'SET_NAME',
-			payload: 'Tom',
-			store: 'storeA'
-		})
+		dispatch(setName('Tom'))
 		expect(fn).toBeCalledWith({
 			name: 'Tom',
 			age: initState.age
 		})
 	})
 	it('modify multiple value once, run one time', () => {
-		dispatch({
-			type: 'SET_IDENTITY',
-			payload: {
+		dispatch(
+			setIdentity({
 				name: 'Tom',
 				age: 40
-			},
-			store: 'storeA'
-		})
+			})
+		)
 		expect(fn).toHaveBeenCalledTimes(1)
 	})
 	it('lazy calling', () => {
-		dispatch({
-			type: 'SET_AGE',
-			payload: initState.age,
-			store: 'storeA'
-		})
+		dispatch(setAge(initState.age))
 		expect(fn).not.toHaveBeenCalled()
 	})
 	it('unsubscribe', () => {
 		unsub()
-		dispatch({
-			type: 'SET_IDENTITY',
-			payload: {
+		dispatch(
+			setIdentity({
 				name: 'Tony',
 				age: 30
-			},
-			store: 'storeA'
-		})
+			})
+		)
 		expect(fn).not.toHaveBeenCalled()
 	})
 })
@@ -98,11 +79,7 @@ describe('cross container observer', () => {
 		fn
 	)
 	it('modify deep key', () => {
-		dispatch({
-			type: 'SET_CITY',
-			payload: 'Beijing',
-			store: 'storeA'
-		})
+		dispatch(setCity('Beijing'))
 		expect(fn).toHaveBeenCalledWith({
 			name: initState.name,
 			city: 'Beijing'
@@ -110,11 +87,7 @@ describe('cross container observer', () => {
 	})
 	it('unsubscribe', () => {
 		unsub()
-		dispatch({
-			type: 'SET_NAME',
-			payload: 'Kyo',
-			store: 'storeB'
-		})
+		dispatch(setName('Kyo'), StoreType.B)
 		expect(fn).not.toHaveBeenCalled()
 	})
 })
