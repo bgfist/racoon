@@ -1,4 +1,4 @@
-import { storeA, storeB, initState, setAge, reset, setCity, setName } from './stores'
+import { storeA, storeB, initState, setAge, reset, setCity, setName, badAction } from './stores'
 import { createHostContainer, createClientContainer } from '../src'
 
 let onmessageA
@@ -85,6 +85,16 @@ test('dispatch/change', () => {
 		...setCity('New York')
 	})
 	expect(callback).toBeCalledWith('New York')
+})
+
+test('dispatch/bad action', () => {
+	const callback = jest.fn().mockName('onChange')
+	clientContainer.observe('storeA#locale.city', callback)
+	clientContainer.dispatch({
+		store: 'storeA',
+		...badAction('Shenzhen')
+	})
+	expect(callback).toBeCalledWith(null)
 })
 
 test('observe multi', () => {

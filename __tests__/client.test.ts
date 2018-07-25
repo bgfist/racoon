@@ -1,4 +1,9 @@
 import { ClientContainer, IConnection } from '../src/client'
+import differ = require('../src/diff')
+
+jest.mock('../src/diff')
+differ.diff = jest.fn((lhs, rhs) => rhs)
+differ.applyPatch = jest.fn((lhs, patches) => patches)
 
 const postMessage = jest.fn().mockName('postMessage')
 let receiveMessage

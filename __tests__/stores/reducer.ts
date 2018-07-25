@@ -1,5 +1,5 @@
 import { createHandler } from './util'
-import { setAge, setName, setDelay, setCity, reset, setIdentity } from './action'
+import { setAge, setName, setDelay, setCity, reset, setIdentity, badAction } from './action'
 
 export const initState = {
 	name: 'ExampleName',
@@ -56,5 +56,12 @@ Q(setIdentity, (state, { name, age }) => {
 		...state,
 		name,
 		age
+	}
+})
+
+// @ts-ignore
+Q(badAction, (state, city) => {
+	return {
+		city
 	}
 })

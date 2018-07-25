@@ -41,7 +41,7 @@
 		"typescript": "^2.9.2"
 	},
 	"dependencies": {
-		"es6-promise": "^4.2.4",
+		"core-js": "^2.5.7",
 		"redux": "^4.0.0"
 	}
 }

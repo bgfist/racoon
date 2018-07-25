@@ -1,6 +1,9 @@
-import { Promise } from 'es6-promise'
+// @ts-ignore
+// tslint:disable-next-line
+import Promise = require('core-js/library/fn/promise')
 import { IContainer, ICallback, IAction, IUnObserve, IPath, IPaths } from './container'
 import { HostContainer } from './host'
+import { diff, applyPatch } from './diff'
 
 export type Messager = (message: string) => void
 
@@ -82,7 +85,20 @@ export class ClientContainer implements IContainer {
 	public observe(path: IPath, callback: ICallback) {
 		const mid = this.genMid()
 		const observeMessage: IObserveMessage = { mid, path, type: 'observe' }
-		this.callbacks[mid] = callback
+
+		const observer = (() => {
+			let observable: any
+			return (change: any) => {
+				try {
+					observable = applyPatch(observable, change)
+				} catch (e) {
+					this.error(`applyPatch: ${e.message}`)
+					return
+				}
+				callback(observable)
+			}
+		})()
+		this.callbacks[mid] = observer
 		this.postMessage(this.pack(observeMessage))
 
 		return () => {
@@ -97,7 +113,7 @@ export class ClientContainer implements IContainer {
 		const mid = this.genMid()
 		const fetchMessage: IFetchMessage = { mid, path, type: 'fetch' }
 		this.postMessage(this.pack(fetchMessage))
-		return new Promise(resolve => {
+		return new Promise((resolve: any) => {
 			this.callbacks[mid] = (change: any) => resolve(change)
 		})
 	}
@@ -135,10 +151,23 @@ export class ClientContainer implements IContainer {
 				if (this.unobserveFuncs[observeMid]) {
 					this.unobserveFuncs[observeMid]()
 				}
-				const unobserve = this.host.observe(path as any, value => {
-					const changeMessage: IChangeMessage = { mid, type: 'change', value }
-					this.postMessage(this.pack(changeMessage))
-				})
+
+				const observer = (() => {
+					let observable: any
+					return (change: any) => {
+						let patch: any
+						try {
+							patch = diff(observable, change)
+						} catch (e) {
+							this.error(`diff: ${e.message}`)
+							return
+						}
+						const changeMessage: IChangeMessage = { mid, type: 'change', value: patch }
+						this.postMessage(this.pack(changeMessage))
+						observable = change
+					}
+				})()
+				const unobserve = this.host.observe(path as any, observer)
 				this.unobserveFuncs[observeMid] = unobserve
 			} catch (e) {
 				this.error(`hostContainer.observe: ${e.message}`)

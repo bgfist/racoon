@@ -10,4 +10,6 @@ export const setCity = createAction<string>('SET_CITY')
 
 export const setIdentity = createAction<{ name: string; age: number }>('SET_IDENTITY')
 
+export const badAction = createAction<string>('BAD_ACTION')
+
 export const reset = createAction('RESET')
