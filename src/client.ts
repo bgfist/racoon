@@ -1,6 +1,6 @@
 // @ts-ignore
 // tslint:disable-next-line
-import Promise = require('core-js/library/fn/promise')
+import corePromise = require('core-js/library/fn/promise')
 import { IContainer, ICallback, IAction, IUnObserve, IPath, IPaths } from './container'
 import { HostContainer } from './host'
 import { diff, applyPatch } from './diff'
@@ -113,7 +113,7 @@ export class ClientContainer implements IContainer {
 		const mid = this.genMid()
 		const fetchMessage: IFetchMessage = { mid, path, type: 'fetch' }
 		this.postMessage(this.pack(fetchMessage))
-		return new Promise((resolve: any) => {
+		return new corePromise((resolve: any) => {
 			this.callbacks[mid] = (change: any) => resolve(change)
 		})
 	}
