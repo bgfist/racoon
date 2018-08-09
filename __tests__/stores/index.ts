@@ -4,7 +4,7 @@ import { createStore } from 'redux'
 export const storeA = createStore(reducer)
 export const storeB = createStore(reducer)
 export function createNewStore() {
-	return createStore(reducer)
+  return createStore(reducer)
 }
 
 export * from './action'

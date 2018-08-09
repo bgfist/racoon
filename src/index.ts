@@ -2,11 +2,11 @@ import { HostContainer, IStores } from './host'
 import { ClientContainer, IConnection } from './client'
 
 export function createHostContainer(stores: IStores) {
-	return new HostContainer(stores)
+  return new HostContainer(stores)
 }
 
 export function createClientContainer(conn: IConnection, host?: HostContainer) {
-	return new ClientContainer(conn, host)
+  return new ClientContainer(conn, host)
 }
 
 export * from './container'
