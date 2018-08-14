@@ -42,7 +42,7 @@ describe('call method/send message', () => {
     clientContainer.fetchState('aaa')
     expect(postMessage).toBeCalledWith({
       mid,
-      type: 'fetch',
+      type: '@@fetch',
       path: 'aaa'
     })
   })
@@ -51,7 +51,7 @@ describe('call method/send message', () => {
     const unobserve = clientContainer.observe('bbb', jest.fn())
     expect(postMessage).toBeCalledWith({
       mid,
-      type: 'observe',
+      type: '@@observe',
       path: 'bbb'
     })
     const observeMid = mid
@@ -59,16 +59,16 @@ describe('call method/send message', () => {
     unobserve()
     expect(postMessage).toBeCalledWith({
       mid,
-      type: 'unobserve',
+      type: '@@unobserve',
       observeMid
     })
   })
 
-  test('dispatch', () => {
+  test('@@dispatch', () => {
     clientContainer.dispatch({ type: 'a', store: 'a', payload: 'a' })
     expect(postMessage).toBeCalledWith({
       mid,
-      type: 'dispatch',
+      type: '@@dispatch',
       action: { type: 'a', store: 'a', payload: 'a' }
     })
   })
@@ -79,7 +79,7 @@ describe('call method/send message', () => {
     })
     expect(postMessage).toBeCalledWith({
       mid,
-      type: 'dispatch',
+      type: '@@dispatch',
       action: { type: 'a', store: 'a', payload: 'a' }
     })
   })
@@ -90,7 +90,7 @@ describe('call method/receive message/get result', () => {
     const res = clientContainer.fetchState('aaa')
     receiveMessage({
       mid,
-      type: 'feedback',
+      type: '@@feedback',
       value: 5
     })
     expect(res).resolves.toBe(5)
@@ -101,7 +101,7 @@ describe('call method/receive message/get result', () => {
     const unobserve = clientContainer.observe('aaa', onchange)
     receiveMessage({
       mid,
-      type: 'change',
+      type: '@@change',
       value: 5
     })
     expect(onchange).toBeCalledWith(5)
@@ -109,7 +109,7 @@ describe('call method/receive message/get result', () => {
 
     receiveMessage({
       mid,
-      type: 'change',
+      type: '@@change',
       value: 6
     })
     onchange.mockClear()
@@ -117,12 +117,12 @@ describe('call method/receive message/get result', () => {
     unobserve()
     receiveMessage({
       mid,
-      type: 'change',
+      type: '@@change',
       value: 6
     })
     receiveMessage({
       mid,
-      type: 'change',
+      type: '@@change',
       value: 7
     })
     expect(onchange).toHaveBeenCalledTimes(0)
@@ -134,13 +134,13 @@ describe('receive message/invoke service/send message', () => {
     const receiveMid = 10000
     receiveMessage({
       mid: receiveMid,
-      type: 'fetch',
+      type: '@@fetch',
       path: '#'
     })
     expect(hostContainer.getState).toBeCalledWith('#')
     expect(postMessage).toBeCalledWith({
       mid: receiveMid,
-      type: 'feedback',
+      type: '@@feedback',
       value: 1
     })
   })
@@ -149,27 +149,27 @@ describe('receive message/invoke service/send message', () => {
     const receiveMid = 20000
     receiveMessage({
       mid: receiveMid,
-      type: 'observe',
+      type: '@@observe',
       path: '#'
     })
     expect(hostContainer.observe.mock.calls[0][0]).toBe('#')
     emitChange(5)
     expect(postMessage).toBeCalledWith({
       mid: receiveMid,
-      type: 'change',
+      type: '@@change',
       value: 5
     })
     emitChange(6)
     expect(postMessage).toBeCalledWith({
       mid: receiveMid,
-      type: 'change',
+      type: '@@change',
       value: 6
     })
 
     postMessage.mockClear()
     receiveMessage({
       mid: receiveMid + 1,
-      type: 'unobserve',
+      type: '@@unobserve',
       observeMid: 20000
     })
     emitChange(7)
@@ -177,11 +177,11 @@ describe('receive message/invoke service/send message', () => {
     expect(postMessage).toHaveBeenCalledTimes(0)
   })
 
-  test('dispatch', () => {
+  test('@@dispatch', () => {
     const receiveMid = 30000
     receiveMessage({
       mid: receiveMid,
-      type: 'dispatch',
+      type: '@@dispatch',
       action: '#'
     })
     expect(hostContainer.dispatch).toBeCalledWith('#')

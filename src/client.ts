@@ -12,7 +12,7 @@ export interface IConnection {
   postMessage: Messager
 }
 
-type MessageType = 'observe' | 'unobserve' | 'change' | 'fetch' | 'feedback' | 'dispatch' | 'error'
+type MessageType = '@@observe' | '@@unobserve' | '@@change' | '@@fetch' | '@@feedback' | '@@dispatch' | '@@error'
 
 interface IMessage {
   mid: number
@@ -20,37 +20,37 @@ interface IMessage {
 }
 
 interface IObserveMessage extends IMessage {
-  type: 'observe'
+  type: '@@observe'
   path: IPath
 }
 
 interface IUnObserveMessage extends IMessage {
-  type: 'unobserve'
+  type: '@@unobserve'
   observeMid: number
 }
 
 interface IChangeMessage extends IMessage {
-  type: 'change'
+  type: '@@change'
   value: any
 }
 
 interface IFetchMessage extends IMessage {
-  type: 'fetch'
+  type: '@@fetch'
   path: string
 }
 
 interface IFeedbackMessage extends IMessage {
-  type: 'feedback'
+  type: '@@feedback'
   value: any
 }
 
 interface IDispatchMessage extends IMessage {
-  type: 'dispatch'
+  type: '@@dispatch'
   action: IAction
 }
 
 interface IErrorMessage extends IMessage {
-  type: 'error'
+  type: '@@error'
   reason: string
 }
 
@@ -84,7 +84,7 @@ export class ClientContainer implements IContainer {
   public observe(path: IPaths, callback: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
   public observe(path: IPath, callback: ICallback) {
     const mid = this.genMid()
-    const observeMessage: IObserveMessage = { mid, path, type: 'observe' }
+    const observeMessage: IObserveMessage = { mid, path, type: '@@observe' }
 
     const observer = (() => {
       let observable: any
@@ -104,14 +104,14 @@ export class ClientContainer implements IContainer {
     return () => {
       delete this.callbacks[mid]
       const $mid = this.genMid()
-      const unObserveMessage: IUnObserveMessage = { mid: $mid, type: 'unobserve', observeMid: mid }
+      const unObserveMessage: IUnObserveMessage = { mid: $mid, type: '@@unobserve', observeMid: mid }
       this.postMessage(this.pack(unObserveMessage))
     }
   }
 
   public fetchState(path: string): Promise<any> {
     const mid = this.genMid()
-    const fetchMessage: IFetchMessage = { mid, path, type: 'fetch' }
+    const fetchMessage: IFetchMessage = { mid, path, type: '@@fetch' }
     this.postMessage(this.pack(fetchMessage))
     return new corePromise((resolve: any) => {
       this.callbacks[mid] = (change: any) => resolve(change)
@@ -123,7 +123,7 @@ export class ClientContainer implements IContainer {
       return action(this.dispatch)
     }
     const mid = this.genMid()
-    const dispatchMessage: IDispatchMessage = { mid, action, type: 'dispatch' }
+    const dispatchMessage: IDispatchMessage = { mid, action, type: '@@dispatch' }
     this.postMessage(this.pack(dispatchMessage))
   }
 
@@ -165,7 +165,7 @@ export class ClientContainer implements IContainer {
               this.error(`diff: ${e.message}`)
               return
             }
-            const changeMessage: IChangeMessage = { mid, type: 'change', value: patch }
+            const changeMessage: IChangeMessage = { mid, type: '@@change', value: patch }
             this.postMessage(this.pack(changeMessage))
             observable = change
           }
@@ -202,7 +202,7 @@ export class ClientContainer implements IContainer {
       } catch (e) {
         this.error(`hostContainer.getState: ${e.message}`)
       }
-      const feedbackMessage: IFeedbackMessage = { mid, type: 'feedback', value }
+      const feedbackMessage: IFeedbackMessage = { mid, type: '@@feedback', value }
       this.postMessage(this.pack(feedbackMessage))
     }
   }
@@ -228,7 +228,7 @@ export class ClientContainer implements IContainer {
 
   private error(reason: string) {
     const mid = this.genMid()
-    const errorMessage: IErrorMessage = { mid, reason, type: 'error' }
+    const errorMessage: IErrorMessage = { mid, reason, type: '@@error' }
     this.postMessage(this.pack(errorMessage))
   }
 
@@ -241,34 +241,29 @@ export class ClientContainer implements IContainer {
     try {
       message = this.unpack(info)
     } catch (e) {
-      this.error(`clientContainer: 消息格式错误: ${info} --- ${e.message}`)
       return
     }
     switch (message.type) {
-      case 'observe':
+      case '@@observe':
         this.onObserve(message)
         break
-      case 'unobserve':
+      case '@@unobserve':
         this.onUnobserve(message)
         break
-      case 'change':
+      case '@@change':
         this.onChange(message)
         break
-      case 'fetch':
+      case '@@fetch':
         this.onFetchState(message)
         break
-      case 'feedback':
+      case '@@feedback':
         this.onFeedback(message)
         break
-      case 'dispatch':
+      case '@@dispatch':
         this.onDispatch(message)
         break
-      case 'error':
+      case '@@error':
         this.onError(message)
-        break
-      default:
-        // @ts-ignore
-        this.error(`clientContainer: 未知的消息类型: ${message.type}`)
         break
     }
   }
