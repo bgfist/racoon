@@ -1,7 +1,7 @@
 // @ts-ignore
 // tslint:disable-next-line
 import corePromise = require('core-js/library/fn/promise')
-import { IContainer, ICallback, IAction, IUnObserve, IPath, IPaths } from './container'
+import { IContainer, ICallback, IAction, Dispatcher, IUnObserve, IPath, IPaths } from './container'
 import { HostContainer } from './host'
 import { diff, applyPatch } from './diff'
 
@@ -118,7 +118,10 @@ export class ClientContainer implements IContainer {
     })
   }
 
-  public dispatch(action: IAction) {
+  public dispatch = (action: IAction | Dispatcher) => {
+    if (typeof action === 'function') {
+      return action(this.dispatch)
+    }
     const mid = this.genMid()
     const dispatchMessage: IDispatchMessage = { mid, action, type: 'dispatch' }
     this.postMessage(this.pack(dispatchMessage))

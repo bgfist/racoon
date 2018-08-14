@@ -1,5 +1,5 @@
 import { Store } from 'redux'
-import { IContainer, IAction, IPath, IPaths, IUnObserve } from './container'
+import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher } from './container'
 
 export type Selector = (
   getState: HostContainer['getState']
@@ -264,7 +264,10 @@ export class HostContainer implements IContainer {
    * 与 redux 的 dispatch 相似
    * @param action store 字段为目标 dispatch 的 store
    */
-  public dispatch(action: IAction): void {
+  public dispatch(action: IAction | Dispatcher): void {
+    if (typeof action === 'function') {
+      return // todo: dispatch到默认store上
+    }
     const { type, store, payload } = action
     this.checkStoreKey(store)
     this.stores[store].dispatch({ type, payload })

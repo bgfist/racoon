@@ -72,6 +72,17 @@ describe('call method/send message', () => {
       action: { type: 'a', store: 'a', payload: 'a' }
     })
   })
+
+  test('dispatch thunk', () => {
+    clientContainer.dispatch(dispatch => {
+      dispatch({ type: 'a', store: 'a', payload: 'a' })
+    })
+    expect(postMessage).toBeCalledWith({
+      mid,
+      type: 'dispatch',
+      action: { type: 'a', store: 'a', payload: 'a' }
+    })
+  })
 })
 
 describe('call method/receive message/get result', () => {

@@ -8,5 +8,9 @@
 
 端到端的消息解释器，解析消息并执行`HostContainer`的相应动作
 
-> notice: 一定要在页面 unload 时调用`clientContainer.destroy()`来取消所有订阅<br/>
+>  注意，一定要在页面 unload 时调用`clientContainer.destroy()`来取消所有订阅
+
 >  虽然目前 clientContainer 内部会防止重复监听
+
+>  支持dispatch简单的thunk
+
