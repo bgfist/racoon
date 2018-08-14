@@ -18,8 +18,6 @@ export interface IStores {
 
 export type IListener = (newValue: any) => void
 
-export type Unobserve = () => void
-
 interface IObservable {
   prevValue: any
   getValue: () => any
@@ -45,16 +43,28 @@ function arrayFind<T>(arr: T[], fn: (item: T) => boolean): T | undefined {
 function has(obj: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(obj, key)
 }
+const isFunc = (a: any) => typeof a === 'function'
 
 export class HostContainer implements IContainer {
+  private static secretKey = '@@SECRET'
+  private defaultKey: string = ''
   private stores: IStores
   private observables: { [storeKey: string]: IObservable[] } = {}
   private selectors: ISelectors = {}
   private selectorValues: { [observeSelector: string]: any } = {}
   private executeJobs: IExecuteJob[] = []
 
-  constructor(stores: IStores) {
-    this.stores = stores
+  constructor(stores: IStores | IStores[string], defaultKey?: string) {
+    const isSingleStore = isFunc(stores.getState) && isFunc(stores.subscribe) && isFunc(stores.dispatch)
+    if (isSingleStore) {
+      defaultKey = HostContainer.secretKey
+      stores = { [defaultKey]: stores as IStores[string] }
+    }
+    this.stores = stores as IStores
+    if (defaultKey) {
+      this.checkStoreKey(defaultKey)
+      this.defaultKey = defaultKey
+    }
     this.subscribeAllStore()
     Object.keys(stores).forEach(key => {
       this.observables[key] = []
@@ -82,11 +92,7 @@ export class HostContainer implements IContainer {
           const newValue = observable.getValue()
           if (this.hasChanged(observable, newValue)) {
             if (!observable.combinePrevValue) {
-              this.executeJobs.push({
-                prevValue: observable.prevValue,
-                newValue,
-                fn: observable.listener
-              })
+              observable.listener.call(null, newValue)
             } else {
               const targetJob = arrayFind<IExecuteJob>(this.executeJobs, job => job.fn === observable.listener)
               if (targetJob) {
@@ -110,12 +116,12 @@ export class HostContainer implements IContainer {
           }
         })
         this.executeJobs.forEach(({ fn, newValue }) => fn.call(null, newValue))
-        this.executeJobs = []
+        this.executeJobs.length = 0
       })
     })
   }
 
-  private pushSingleObservable(storeKey: string, observable: IObservable): Unobserve {
+  private pushSingleObservable(storeKey: string, observable: IObservable): IUnObserve {
     this.observables[storeKey].push(observable)
     return () => {
       this.observables[storeKey] = this.observables[storeKey].filter(o => o !== observable)
@@ -133,6 +139,15 @@ export class HostContainer implements IContainer {
     if (!this.stores[key]) {
       throw new TypeError(`未找到名为 ${key} 的 store`)
     }
+  }
+
+  private getPath(path: string): [string, string] {
+    const result = path.split('#')
+    if (result.length < 2 && this.defaultKey) {
+      return [this.defaultKey, path]
+    }
+    // this.checkStoreKey(result[0])
+    return path.split('#') as [string, string]
   }
 
   /**
@@ -196,7 +211,7 @@ export class HostContainer implements IContainer {
    */
   public observe(path: string, callback: IListener): IUnObserve
   public observe(path: IPaths, callback: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
-  public observe(path: IPath, listener: IListener): Unobserve {
+  public observe(path: IPath, listener: IListener): IUnObserve {
     if (typeof path === 'string') {
       if (path[0] === '$') {
         // observe 相同 selector 暂时开两个实例
@@ -218,7 +233,7 @@ export class HostContainer implements IContainer {
           }
         })
       }
-      const [storeKey, keysStr] = path.split('#')
+      const [storeKey, keysStr] = this.getPath(path)
       const getValue = this.getAccessFunc(storeKey, keysStr)
       const prevValue = getValue()
       listener.call(null, prevValue)
@@ -231,7 +246,7 @@ export class HostContainer implements IContainer {
     }
     const allObservables: IObservable[] = []
     const unsubscribe = Object.keys(path).map(mainKey => {
-      const [storeKey, keysStr] = path[mainKey].split('#')
+      const [storeKey, keysStr] = this.getPath(path[mainKey])
       const accessFunc = this.getAccessFunc(storeKey, keysStr)
       const getValue = () => ({
         [mainKey]: accessFunc()
@@ -268,7 +283,8 @@ export class HostContainer implements IContainer {
     if (typeof action === 'function') {
       return // todo: dispatch到默认store上
     }
-    const { type, store, payload } = action
+    const { type, payload } = action
+    const store = action.store || this.defaultKey
     this.checkStoreKey(store)
     this.stores[store].dispatch({ type, payload })
   }
@@ -277,7 +293,13 @@ export class HostContainer implements IContainer {
    * 获取某个 store 上或某个 selector 的值
    * @param path 以 '$' 开头为 selector 路径
    */
-  public getState(path: string): any {
+  public getState(path?: string): any {
+    if (!path) {
+      if (!this.defaultKey) {
+        throw new TypeError('当前为多个 store，请指定某一个')
+      }
+      return this.stores[this.defaultKey].getState()
+    }
     if (path[0] === '$') {
       if (!has(this.selectorValues, path)) {
         const [selectorKey, args] = this.parseSelector(path)
@@ -287,7 +309,7 @@ export class HostContainer implements IContainer {
       }
       return this.selectorValues[path]
     }
-    const [storeKey, keysStr] = path.split('#')
+    const [storeKey, keysStr] = this.getPath(path)
     return this.getAccessFunc(storeKey, keysStr)()
   }
 

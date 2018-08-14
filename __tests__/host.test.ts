@@ -2,10 +2,13 @@ import { createNewStore, initState } from './stores'
 import { HostContainer } from '../src/host'
 import { setName, setCity, reset, setAge, StoreType, createTester } from './stores/createHostTester'
 
-const container = new HostContainer({
-  storeA: createNewStore(),
-  storeB: createNewStore()
-})
+const container = new HostContainer(
+  {
+    storeA: createNewStore(),
+    storeB: createNewStore()
+  },
+  'storeA'
+)
 const { dispatch, observe, getState } = createTester(container)
 
 describe('basic dispatch', () => {
@@ -71,8 +74,29 @@ describe('basic observing keys', () => {
     })
     it('getState from none-exist store', () => {
       expect(() => {
-        getState('storeC')
+        getState('storeC#')
       }).toThrow('未找到名为 storeC 的 store')
     })
+  })
+})
+
+describe('default key', () => {
+  dispatch(reset())
+  dispatch(reset(), StoreType.B)
+  it('get default store state', () => {
+    expect(getState()).toBe(initState)
+  })
+  it('dispatch default store', () => {
+    dispatch(setAge(10))
+    expect(getState('age')).toBe(10)
+  })
+  it('observe default store', () => {
+    const fn = jest.fn()
+    const unob = observe('age', fn)
+    expect(fn).toHaveBeenCalledWith(10)
+    fn.mockClear()
+    dispatch(setAge(20))
+    expect(fn).toHaveBeenCalledWith(20)
+    unob()
   })
 })

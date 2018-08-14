@@ -1,6 +1,6 @@
 export interface IAction {
   type: string
-  store: string
+  store?: string
   payload?: any
 }
 
