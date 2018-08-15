@@ -20,10 +20,10 @@ const bridgeB = {
   }
 }
 
-const hostContainer = createHostContainer({ storeA, storeB })
+const hostContainer = createHostContainer({ storeA, storeB }, 'storeA')
 hostContainer.defineSelectors({
   selectNameAndCity: getState => (upperCase = false) => {
-    const state = getState('storeA')
+    const state = getState('storeA#')
     const nameAndCity = `${state.name}-${state.locale.city}`
     return upperCase ? nameAndCity.toUpperCase() : nameAndCity
   }
@@ -47,7 +47,7 @@ test('fetchState/feedback', () => {
 test('observe/feedback', () => {
   const callback = jest.fn().mockName('onChange')
 
-  clientContainer.observe('storeA', callback)
+  clientContainer.observe('storeA#', callback)
   expect(callback).toBeCalledWith(initState)
   callback.mockClear()
 
