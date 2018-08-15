@@ -22,14 +22,11 @@ const bridgeB = {
 
 const hostContainer = createHostContainer({ storeA, storeB })
 hostContainer.defineSelectors({
-  selectNameAndCity: getState => ({
-    select: (upperCase = false) => {
-      const state = getState('storeA')
-      const nameAndCity = `${state.name}-${state.locale.city}`
-      return upperCase ? nameAndCity.toUpperCase() : nameAndCity
-    },
-    affected: ['storeA#name', 'storeA#locale.city']
-  })
+  selectNameAndCity: getState => (upperCase = false) => {
+    const state = getState('storeA')
+    const nameAndCity = `${state.name}-${state.locale.city}`
+    return upperCase ? nameAndCity.toUpperCase() : nameAndCity
+  }
 })
 const clientContainer = createClientContainer(bridgeA)
 createClientContainer(bridgeB, hostContainer)

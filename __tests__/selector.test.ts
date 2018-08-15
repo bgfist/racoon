@@ -10,15 +10,12 @@ const hostContainer = new HostContainer({
 const { dispatch, getState, observe } = createTester(hostContainer)
 const fn = jest.fn()
 
-describe.only('basic selector observer', () => {
+describe('basic selector observer', () => {
   hostContainer.defineSelectors({
-    computedDescribe: getStoreState => ({
-      select: (connector: string) => {
-        const state = getStoreState('storeA')
-        return `${state.name}${connector}${state.age}`
-      },
-      affected: ['storeA#age', 'storeA#name']
-    })
+    computedDescribe: getStoreState => (connector: string) => {
+      const state = getStoreState('storeA')
+      return `${state.name}${connector}${state.age}`
+    }
   })
   const unsub = observe('$computedDescribe("-")', fn)
   beforeEach(() => {
@@ -116,5 +113,35 @@ describe.only('basic selector observer', () => {
       })
     )
     expect(fn).not.toHaveBeenCalled()
+  })
+})
+
+describe('get value by dot', () => {
+  hostContainer.defineSelectors({
+    locale: getStoreState => () => getStoreState('storeA#locale')
+  })
+  const fnCity = jest.fn()
+  const fnDelay = jest.fn()
+  const observeCity = observe('$locale().city', fnCity)
+  expect(fnCity).toHaveBeenCalledWith(initState.locale.city)
+  const observeDelay = observe('$locale().delay', fnDelay)
+  expect(fnDelay).toHaveBeenCalledWith(initState.locale.delay)
+  beforeEach(() => {
+    dispatch(reset())
+    fnCity.mockClear()
+    fnDelay.mockClear()
+  })
+  it('lazy calling', () => {
+    dispatch(setCity('NewYork'))
+    expect(fnCity).toHaveBeenCalledWith('NewYork')
+    expect(fnDelay).not.toHaveBeenCalled()
+  })
+  it('unobserve', () => {
+    observeCity()
+    observeDelay()
+    dispatch(setCity('NewYork'))
+    dispatch(setDelay(99))
+    expect(fnCity).not.toHaveBeenCalled()
+    expect(fnDelay).not.toHaveBeenCalled()
   })
 })

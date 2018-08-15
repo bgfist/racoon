@@ -1,12 +1,7 @@
 import { Store } from 'redux'
 import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher } from './container'
 
-export type Selector = (
-  getState: HostContainer['getState']
-) => {
-  select: (...args: any[]) => any
-  affected: string[]
-}
+export type Selector = (getState: HostContainer['getState']) => (...args: any[]) => any
 
 export interface ISelectors {
   [k: string]: Selector
@@ -51,7 +46,7 @@ export class HostContainer implements IContainer {
   private stores: IStores
   private observables: { [storeKey: string]: IObservable[] } = {}
   private selectors: ISelectors = {}
-  private selectorValues: { [observeSelector: string]: any } = {}
+  private selectorListeners: IObservable[] = []
   private executeJobs: IExecuteJob[] = []
 
   constructor(stores: IStores | IStores[string], defaultKey?: string) {
@@ -125,7 +120,6 @@ export class HostContainer implements IContainer {
     this.observables[storeKey].push(observable)
     return () => {
       this.observables[storeKey] = this.observables[storeKey].filter(o => o !== observable)
-      // observable = null
     }
   }
 
@@ -141,12 +135,37 @@ export class HostContainer implements IContainer {
     }
   }
 
+  private getValueByKeys(state: any, keys: string[]): any {
+    if (!keys.length) {
+      return state
+    }
+    try {
+      keys.forEach(key => {
+        state = state[key]
+      })
+    } catch {
+      state = undefined
+    }
+    return state
+  }
+
+  private generateObservable(getValue: () => any, listener: IListener, shouldExecute = true): IObservable {
+    const prevValue = getValue()
+    if (shouldExecute) {
+      listener.call(null, prevValue)
+    }
+    return {
+      getValue,
+      prevValue,
+      listener
+    }
+  }
+
   private getPath(path: string): [string, string] {
     const result = path.split('#')
     if (result.length < 2 && this.defaultKey) {
       return [this.defaultKey, path]
     }
-    // this.checkStoreKey(result[0])
     return path.split('#') as [string, string]
   }
 
@@ -155,53 +174,44 @@ export class HostContainer implements IContainer {
    * @param storeKey 目标 store 的 key
    * @param keysStr 获取路径，以 '.' 分隔
    */
-  private getAccessFunc(storeKey: string, keysStr: string | undefined): () => any {
+  private path2Func(storeKey: string, keysStr: string | undefined): () => any {
     this.checkStoreKey(storeKey)
     if (!keysStr) {
       return () => this.stores[storeKey].getState()
     }
     const keys = keysStr.split('.')
-    return () => {
-      let value: any = this.stores[storeKey].getState()
-      // 未取到的 key 全部返回 undefined
-      try {
-        keys.forEach(key => {
-          value = value[key]
-        })
-      } catch (e) {
-        value = undefined
-      }
-      return value
-    }
+    return () => this.getValueByKeys(this.stores[storeKey].getState(), keys)
   }
 
   /**
    * 返回解析后的 selector 和 传入参数
-   * @param path observe 的 selector 路径，包含标识符 '$'
+   * @param selectorKey observe 的 selector 路径，包含标识符 '$'
    */
-  private parseSelector(path: string): [string, any[]] {
-    path = path.slice(1).trim()
-    if (!/\(.*\)/.test(path)) {
+  private selector2Func(selectorKey: string): () => any {
+    selectorKey = selectorKey.slice(1).trim()
+    if (!/\(.*\)/.test(selectorKey)) {
       throw new TypeError('selector 中必须为执行表达式')
     }
     let selector = ''
     let argStr = ''
-    // const [, selector, argStr] = path.match(/^(\w+)\((.*)\)$/) as RegExpMatchArray
+    let keys: string[]
     try {
-      const matchArr = path.match(/^(\w+)\((.*)\)$/) as RegExpMatchArray
+      const matchArr = selectorKey.match(/^(\w+)\((.*)\)((\.\w+)*)$/) as RegExpMatchArray
       selector = matchArr[1]
       argStr = matchArr[2]
+      keys = matchArr[3].split('.').filter(s => s)
     } catch (e) {
-      throw new TypeError(`无法解析的 selector: $${path}`)
+      throw new TypeError(`无法解析的 selector: $${selectorKey}`)
     }
-    let args = []
+    let args: any[]
     // 参数解析策略暂时是只能用 JSON 解析
     try {
       args = JSON.parse(`[${argStr}]`)
     } catch (e) {
       throw new TypeError(`不能转为 JSON 的 selector 参数: ${argStr}`)
     }
-    return [selector, args]
+    this.checkSelectorKey(selector)
+    return () => this.getValueByKeys(this.selectors[selector](this.getState)(...args), keys)
   }
 
   /**
@@ -214,48 +224,24 @@ export class HostContainer implements IContainer {
   public observe(path: IPath, listener: IListener): IUnObserve {
     if (typeof path === 'string') {
       if (path[0] === '$') {
-        // observe 相同 selector 暂时开两个实例
-        const [selectorKey, args] = this.parseSelector(path)
-        this.checkSelectorKey(selectorKey)
-        const { select, affected } = this.selectors[selectorKey](this.getState)
-        const observeKeys: { [key: number]: string } = {}
-        affected.forEach((key, i) => {
-          observeKeys[i] = key
-        })
-
-        // 确保 newValue 与此不等以此保证第一次 listener 被调用
-        this.selectorValues[path] = NaN
-        return this.observe(observeKeys, () => {
-          const newValue = select.apply(null, args)
-          if (this.selectorValues[path] !== newValue) {
-            this.selectorValues[path] = newValue
-            listener.call(null, newValue)
-          }
-        })
+        const observable = this.generateObservable(this.selector2Func(path), listener)
+        this.selectorListeners.push(observable)
+        return () => {
+          this.selectorListeners = this.selectorListeners.filter(k => k !== observable)
+        }
       }
       const [storeKey, keysStr] = this.getPath(path)
-      const getValue = this.getAccessFunc(storeKey, keysStr)
-      const prevValue = getValue()
-      listener.call(null, prevValue)
-      const observable = {
-        prevValue,
-        getValue,
-        listener
-      }
+      const observable = this.generateObservable(this.path2Func(storeKey, keysStr), listener)
       return this.pushSingleObservable(storeKey, observable)
     }
     const allObservables: IObservable[] = []
     const unsubscribe = Object.keys(path).map(mainKey => {
       const [storeKey, keysStr] = this.getPath(path[mainKey])
-      const accessFunc = this.getAccessFunc(storeKey, keysStr)
+      const accessFunc = this.path2Func(storeKey, keysStr)
       const getValue = () => ({
         [mainKey]: accessFunc()
       })
-      const observable = {
-        prevValue: getValue(),
-        getValue,
-        listener
-      }
+      const observable = this.generateObservable(getValue, listener, false)
       allObservables.push(observable)
       return this.pushSingleObservable(storeKey, observable)
     })
@@ -287,6 +273,13 @@ export class HostContainer implements IContainer {
     const store = action.store || this.defaultKey
     this.checkStoreKey(store)
     this.stores[store].dispatch({ type, payload })
+    this.selectorListeners.forEach(observable => {
+      const newValue = observable.getValue()
+      if (newValue !== observable.prevValue) {
+        observable.prevValue = newValue
+        observable.listener.call(null, newValue)
+      }
+    })
   }
 
   /**
@@ -301,16 +294,10 @@ export class HostContainer implements IContainer {
       return this.stores[this.defaultKey].getState()
     }
     if (path[0] === '$') {
-      if (!has(this.selectorValues, path)) {
-        const [selectorKey, args] = this.parseSelector(path)
-        this.checkSelectorKey(selectorKey)
-        const { select } = this.selectors[selectorKey](this.getState)
-        return select.apply(null, args)
-      }
-      return this.selectorValues[path]
+      return this.selector2Func(path)()
     }
     const [storeKey, keysStr] = this.getPath(path)
-    return this.getAccessFunc(storeKey, keysStr)()
+    return this.path2Func(storeKey, keysStr)()
   }
 
   /**

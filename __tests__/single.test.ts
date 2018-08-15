@@ -49,13 +49,10 @@ describe('basic observing keys', () => {
   })
   describe('selector', () => {
     container.defineSelectors({
-      identity: getStoreState => ({
-        select: (connector: string) => {
-          const { name, age } = getStoreState()
-          return name + connector + age
-        },
-        affected: ['name', 'age']
-      })
+      identity: getStoreState => (connector: string) => {
+        const { name, age } = getStoreState()
+        return name + connector + age
+      }
     })
     const fn = jest.fn()
     beforeEach(() => {
