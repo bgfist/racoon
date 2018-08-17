@@ -3,10 +3,12 @@
  * 1. 仅支持6种基本数据类型：string number null boolean object array
  * 2. 不能用undefined类型，因为json不支持，可以用null
  * 3. Date类型不支持，如果需要可以用时间戳代替
+ * 4. 支持immutable
  */
 // @ts-ignore
 // tslint:disable-next-line
 import Map = require('core-js/library/fn/map')
+import { isImmutable } from './util'
 
 export const enum PatchType {
   ARR_MOVE,
@@ -29,8 +31,27 @@ type OBJ_DEL = [PatchType.OBJ_DEL, ...string[]]
 type Patch = ARR_MOVE | ARR_ADD | ARR_DEL | OBJ_KEY | OBJ_ASSIGN | OBJ_RETAIN | OBJ_DEL
 
 const isObject = (o: any) => o != null && typeof o === 'object'
+const isArray = (o: any) => o instanceof Array
 const isEmpty = (o: any) => isObject(o) && Object.keys(o).length === 0
 const isSingleAssign = (patches: Patch[]) => patches.length === 1 && patches[0][0] === PatchType.OBJ_ASSIGN
+
+function isImmutableArray(o: any) {
+  const Constructor = o.constructor
+  return Constructor.isList || Constructor.isSet || Constructor.isOrderedSet
+}
+
+function toJS(o: any): any {
+  if (!isObject(o)) {
+    return o
+  }
+  if (isImmutable(o)) {
+    return o.toJS()
+  }
+  return Object.keys(o).reduce((ret: any, key) => {
+    ret[key] = toJS(o[key])
+    return ret
+  }, {})
+}
 
 export function diff(lhs: any, rhs: any): Patch[] {
   if (lhs === rhs) {
@@ -38,11 +59,27 @@ export function diff(lhs: any, rhs: any): Patch[] {
   }
 
   if (!isObject(lhs) || !isObject(rhs)) {
-    return [[PatchType.OBJ_ASSIGN, rhs]]
+    return [[PatchType.OBJ_ASSIGN, toJS(rhs)]]
   }
 
-  if (lhs instanceof Array) {
-    if (!(rhs instanceof Array)) {
+  if (isImmutable(lhs)) {
+    if (!isImmutable(rhs)) {
+      throw new Error('diff rhs not Immutable')
+    }
+    if (isImmutableArray(lhs)) {
+      if (!isImmutableArray(rhs)) {
+        throw new Error('diff rhs not Immutable Array')
+      }
+      lhs = lhs.toArray()
+      rhs = rhs.toArray()
+    } else {
+      lhs = lhs.toObject()
+      rhs = rhs.toObject()
+    }
+  }
+
+  if (isArray(lhs)) {
+    if (!isArray(rhs)) {
       throw new Error('diff rhs not Array')
     }
     return arrayDiff(lhs, rhs)
@@ -103,7 +140,7 @@ export function applyPatch(lhs: any, patches: Patch[]) {
     }
   }
 
-  if (lhs instanceof Array) {
+  if (isArray(lhs)) {
     return applyArrayPatch(lhs, patches)
   }
 

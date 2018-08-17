@@ -1,4 +1,6 @@
 import { diff, arrayDiff, applyPatch, applyArrayPatch, PatchType } from '../src/diff'
+// tslint:disable-next-line
+import { Map, List, fromJS, Set, Record } from 'immutable'
 
 describe('diff value', () => {
   test('both value', () => {
@@ -64,7 +66,7 @@ describe('diff array', () => {
   })
 
   test('del', () => {
-    const lhs = [a, b, c]
+    const lhs = [a, b, c, 1]
     const rhs = [a, b]
     expect(arrayDiff(lhs, rhs)).toEqual([[PatchType.ARR_DEL, 2]])
     expect(applyArrayPatch(lhs, arrayDiff(lhs, rhs))).toEqual(rhs)
@@ -211,5 +213,87 @@ describe('diff mixed', () => {
       }
     }
     expect(applyPatch(lhs, diff(lhs, rhs))).toEqual(rhs)
+  })
+})
+
+describe('diff immutable', () => {
+  test('diff Immutable.Map', () => {
+    const lhs = Map({ a: 1, b: 2 })
+    const rhs = lhs.set('a', 3)
+
+    const state = applyPatch(undefined, diff(undefined, lhs))
+    expect(state).toEqual({ a: 1, b: 2 })
+    expect(applyPatch(state, diff(lhs, rhs))).toEqual({ a: 3, b: 2 })
+  })
+
+  test('diff Immutable.List', () => {
+    const lhs = List([1, 2, 3, 4])
+    const rhs = lhs.push(5)
+
+    const state = applyPatch(undefined, diff(undefined, lhs))
+    expect(state).toEqual([1, 2, 3, 4])
+    expect(applyPatch(state, diff(lhs, rhs))).toEqual([1, 2, 3, 4, 5])
+  })
+
+  test('diff Immutable.Set', () => {
+    const lhs = Set([1, 2, 3, 4])
+    const rhs = lhs.add(5)
+
+    const state = applyPatch(undefined, diff(undefined, lhs))
+    expect(state).toEqual([1, 2, 3, 4])
+    expect(applyPatch(state, diff(lhs, rhs))).toEqual([1, 2, 3, 4, 5])
+  })
+
+  test('diff Immutable.Record', () => {
+    const User = Record({
+      name: '',
+      age: 0
+    })
+    const lhs = new User()
+    const rhs = lhs.set('name', 'jack')
+
+    const state = applyPatch(undefined, diff(undefined, lhs))
+    expect(state).toEqual({
+      name: '',
+      age: 0
+    })
+    expect(applyPatch(state, diff(lhs, rhs))).toEqual({
+      name: 'jack',
+      age: 0
+    })
+  })
+
+  test('diff Immutable mixed', () => {
+    const a = { name: 'jack' }
+    const b = { name: 'rose' }
+    const c = { name: 'ming' }
+
+    let lhs = fromJS({
+      a: [a, b, c],
+      b: {
+        c: 'hello world'
+      }
+    })
+    let rhs = lhs.set('a', lhs.get('a').unshift(Map({ name: 'uzi' }))).setIn(['b', 'c'], 'ni hao')
+    lhs = { aaa: lhs }
+    rhs = { aaa: rhs }
+
+    const state = applyPatch(undefined, diff(undefined, lhs))
+    expect(state).toEqual({
+      aaa: {
+        a: [a, b, c],
+        b: {
+          c: 'hello world'
+        }
+      }
+    })
+    expect(applyPatch(state, diff(lhs, rhs))).toEqual({
+      aaa: {
+        a: [{ name: 'uzi' }, a, b, c],
+        b: {
+          c: 'ni hao'
+        }
+      }
+    })
   })
 })
