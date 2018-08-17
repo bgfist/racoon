@@ -1,5 +1,6 @@
 import { Store } from 'redux'
 import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher } from './container'
+import { isImmutable } from './util'
 
 export type Selector = (getState: HostContainer['getState']) => (...args: any[]) => any
 
@@ -141,7 +142,11 @@ export class HostContainer implements IContainer {
     }
     try {
       keys.forEach(key => {
-        state = state[key]
+        if (isImmutable(state)) {
+          state = state.get(key)
+        } else {
+          state = state[key]
+        }
       })
     } catch {
       state = undefined
