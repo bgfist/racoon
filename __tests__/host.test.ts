@@ -100,3 +100,31 @@ describe('default key', () => {
     unob()
   })
 })
+
+describe('watching action', () => {
+  const fn = jest.fn()
+  const unwatch = container.watchAction('SET_AGE', fn)
+  beforeEach(() => {
+    fn.mockClear()
+  })
+  it('basic', () => {
+    dispatch(setAge(20))
+    expect(fn).toHaveBeenCalledWith(20)
+  })
+  it('not lazy calling', () => {
+    dispatch(setAge(20))
+    expect(fn).toHaveBeenCalledWith(20)
+  })
+  it('unwatch', () => {
+    unwatch()
+    dispatch(setAge(20))
+    expect(fn).not.toHaveBeenCalled()
+  })
+  it('to string', () => {
+    const fnStr = {}
+    fnStr.toString = () => 'SET_NAME'
+    container.watchAction(fnStr, fn)
+    dispatch(setName('QAQ'))
+    expect(fn).toHaveBeenCalledWith('QAQ')
+  })
+})

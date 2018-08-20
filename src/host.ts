@@ -14,6 +14,8 @@ export interface IStores {
 
 export type IListener = (newValue: any) => void
 
+export type IWatcher = (payload: any) => void
+
 interface IObservable {
   prevValue: any
   getValue: () => any
@@ -49,6 +51,7 @@ export class HostContainer implements IContainer {
   private selectors: ISelectors = {}
   private selectorListeners: IObservable[] = []
   private executeJobs: IExecuteJob[] = []
+  private watchingAction: { [type: string]: IWatcher[] } = {}
 
   constructor(stores: IStores | IStores[string], defaultKey?: string) {
     const isSingleStore = isFunc(stores.getState) && isFunc(stores.subscribe) && isFunc(stores.dispatch)
@@ -69,6 +72,7 @@ export class HostContainer implements IContainer {
     this.dispatch = this.dispatch.bind(this)
     this.getState = this.getState.bind(this)
     this.defineSelectors = this.defineSelectors.bind(this)
+    this.watchAction = this.watchAction.bind(this)
   }
 
   private hasChanged(observable: IObservable, newValue: any): boolean {
@@ -81,6 +85,17 @@ export class HostContainer implements IContainer {
 
   private subscribeAllStore(): void {
     const stores = this.stores
+    if (this.defaultKey) {
+      const store = stores[this.defaultKey]
+      const { dispatch } = store
+      const newdispatch: any = (action: IAction) => {
+        if (this.watchingAction[action.type]) {
+          this.watchingAction[action.type].forEach(watcher => watcher.call(null, action.payload))
+        }
+        return dispatch(action)
+      }
+      store.dispatch = newdispatch
+    }
     Object.keys(stores).forEach(key => {
       const store = stores[key]
       store.subscribe(() => {
@@ -313,6 +328,23 @@ export class HostContainer implements IContainer {
     this.selectors = {
       ...this.selectors,
       ...selectors
+    }
+  }
+
+  public watchAction(type: any, watcher: IWatcher): IUnObserve {
+    if (type.toString) {
+      type = type.toString()
+    }
+    if (!this.defaultKey) {
+      throw new TypeError('仅在具有默认 store 时有效')
+    }
+    if (this.watchingAction[type]) {
+      this.watchingAction[type].push(watcher)
+    } else {
+      this.watchingAction[type] = [watcher]
+    }
+    return () => {
+      this.watchingAction[type] = this.watchingAction[type].filter((k: IWatcher) => k !== watcher)
     }
   }
 }
