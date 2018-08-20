@@ -64,7 +64,24 @@ describe('call method/send message', () => {
     })
   })
 
-  test('@@dispatch', () => {
+  test('watch/unwatch', () => {
+    const unwatch = clientContainer.watch('bbb', jest.fn())
+    expect(postMessage).toBeCalledWith({
+      mid,
+      type: '@@watch',
+      actionType: 'bbb'
+    })
+    const watchMid = mid
+
+    unwatch()
+    expect(postMessage).toBeCalledWith({
+      mid,
+      type: '@@unwatch',
+      watchMid
+    })
+  })
+
+  test('dispatch', () => {
     clientContainer.dispatch({ type: 'a', store: 'a', payload: 'a' })
     expect(postMessage).toBeCalledWith({
       mid,
@@ -127,6 +144,38 @@ describe('call method/receive message/get result', () => {
     })
     expect(onchange).toHaveBeenCalledTimes(0)
   })
+
+  test('watch/payload/unwatch', () => {
+    const onaction = jest.fn().mockName('onAction')
+    const unwatch = clientContainer.watch('', onaction)
+    receiveMessage({
+      mid,
+      type: '@@action',
+      payload: 5
+    })
+    expect(onaction).toBeCalledWith(5)
+    onaction.mockClear()
+
+    receiveMessage({
+      mid,
+      type: '@@action',
+      payload: 6
+    })
+    onaction.mockClear()
+
+    unwatch()
+    receiveMessage({
+      mid,
+      type: '@@action',
+      payload: 6
+    })
+    receiveMessage({
+      mid,
+      type: '@@action',
+      payload: 7
+    })
+    expect(onaction).toHaveBeenCalledTimes(0)
+  })
 })
 
 describe('receive message/invoke service/send message', () => {
@@ -177,7 +226,7 @@ describe('receive message/invoke service/send message', () => {
     expect(postMessage).toHaveBeenCalledTimes(0)
   })
 
-  test('@@dispatch', () => {
+  test('dispatch', () => {
     const receiveMid = 30000
     receiveMessage({
       mid: receiveMid,

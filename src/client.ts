@@ -1,7 +1,7 @@
 // @ts-ignore
 // tslint:disable-next-line
 import corePromise = require('core-js/library/fn/promise')
-import { IContainer, ICallback, IAction, Dispatcher, IUnObserve, IPath, IPaths } from './container'
+import { IContainer, IListener, IAction, Dispatcher, IUnObserve, IPath, IPaths, IWatcher, IUnWatch } from './container'
 import { HostContainer } from './host'
 import { diff, applyPatch } from './diff'
 
@@ -12,7 +12,17 @@ export interface IConnection {
   postMessage: Messager
 }
 
-type MessageType = '@@observe' | '@@unobserve' | '@@change' | '@@fetch' | '@@feedback' | '@@dispatch' | '@@error'
+type MessageType =
+  | '@@observe'
+  | '@@unobserve'
+  | '@@change'
+  | '@@fetch'
+  | '@@feedback'
+  | '@@dispatch'
+  | '@@error'
+  | '@@watch'
+  | '@@unwatch'
+  | '@@action'
 
 interface IMessage {
   mid: number
@@ -54,14 +64,43 @@ interface IErrorMessage extends IMessage {
   reason: string
 }
 
-type Message = IObserveMessage | IUnObserveMessage | IChangeMessage | IFetchMessage | IFeedbackMessage | IDispatchMessage | IErrorMessage
+interface IWatchMessage extends IMessage {
+  type: '@@watch'
+  actionType: string
+}
+
+interface IActionMessage extends IMessage {
+  type: '@@action'
+  payload: any
+}
+
+interface IUnWatchMessage extends IMessage {
+  type: '@@unwatch'
+  watchMid: number
+}
+
+type Message =
+  | IObserveMessage
+  | IUnObserveMessage
+  | IChangeMessage
+  | IFetchMessage
+  | IFeedbackMessage
+  | IDispatchMessage
+  | IErrorMessage
+  | IWatchMessage
+  | IActionMessage
+  | IUnWatchMessage
 
 interface IMessageCallbacks {
-  [mid: number]: ICallback
+  [mid: number]: IListener
 }
 
 interface IUnObserveFuncs {
   [observeMid: number]: IUnObserve
+}
+
+interface IUnWatchFuncs {
+  [watchMid: number]: IUnWatch
 }
 
 export class ClientContainer implements IContainer {
@@ -69,20 +108,22 @@ export class ClientContainer implements IContainer {
   private host?: HostContainer
   private callbacks: IMessageCallbacks
   private unobserveFuncs: IUnObserveFuncs
+  private unwatchFuncs: IUnWatchFuncs
   private mid: number
 
   constructor(conn: IConnection, host?: HostContainer) {
     this.host = host
     this.callbacks = {}
     this.unobserveFuncs = {}
+    this.unwatchFuncs = {}
     this.mid = 0
     this.postMessage = conn.postMessage
     conn.handleMessage(this.handleMessage.bind(this))
   }
 
-  public observe(path: string, callback: ICallback): IUnObserve
-  public observe(path: IPaths, callback: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
-  public observe(path: IPath, callback: ICallback) {
+  public observe(path: string, listener: IListener): IUnObserve
+  public observe(path: IPaths, listener: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
+  public observe(path: IPath, listener: IListener) {
     const mid = this.genMid()
     const observeMessage: IObserveMessage = { mid, path, type: '@@observe' }
 
@@ -95,7 +136,7 @@ export class ClientContainer implements IContainer {
           this.error(`applyPatch: ${e.message}`)
           return
         }
-        callback(observable)
+        listener(observable)
       }
     })()
     this.callbacks[mid] = observer
@@ -106,6 +147,21 @@ export class ClientContainer implements IContainer {
       const $mid = this.genMid()
       const unObserveMessage: IUnObserveMessage = { mid: $mid, type: '@@unobserve', observeMid: mid }
       this.postMessage(this.pack(unObserveMessage))
+    }
+  }
+
+  public watch(type: any, watcher: IWatcher) {
+    const mid = this.genMid()
+    const watchMessage: IWatchMessage = { mid, type: '@@watch', actionType: type.toString() }
+
+    this.callbacks[mid] = watcher
+    this.postMessage(this.pack(watchMessage))
+
+    return () => {
+      delete this.callbacks[mid]
+      const $mid = this.genMid()
+      const unWatchMessage: IUnWatchMessage = { mid: $mid, type: '@@unwatch', watchMid: mid }
+      this.postMessage(this.pack(unWatchMessage))
     }
   }
 
@@ -132,6 +188,8 @@ export class ClientContainer implements IContainer {
     this.callbacks = {}
     Object.keys(this.unobserveFuncs).forEach((observeMid: any) => this.unobserveFuncs[observeMid]())
     this.unobserveFuncs = {}
+    Object.keys(this.unwatchFuncs).forEach((watchMid: any) => this.unwatchFuncs[watchMid]())
+    this.unwatchFuncs = {}
   }
 
   private genMid() {
@@ -190,6 +248,43 @@ export class ClientContainer implements IContainer {
     const { mid, value } = message
     if (this.callbacks[mid]) {
       this.callbacks[mid](value)
+    }
+  }
+
+  private onWatch(message: IWatchMessage) {
+    if (this.host) {
+      const { mid, actionType, mid: watchMid } = message
+      try {
+        // 若重复监听，取消之前的
+        if (this.unwatchFuncs[watchMid]) {
+          this.unwatchFuncs[watchMid]()
+        }
+
+        const watcher = (payload: any) => {
+          const actionMessage: IActionMessage = { mid, type: '@@action', payload }
+          this.postMessage(this.pack(actionMessage))
+        }
+
+        const unwatch = this.host.watch(actionType, watcher)
+        this.unwatchFuncs[watchMid] = unwatch
+      } catch (e) {
+        this.error(`hostContainer.watch: ${e.message}`)
+      }
+    }
+  }
+
+  private onUnwatch(message: IUnWatchMessage) {
+    const { watchMid } = message
+    if (this.unwatchFuncs[watchMid]) {
+      this.unwatchFuncs[watchMid]()
+      delete this.unwatchFuncs[watchMid]
+    }
+  }
+
+  private onAction(message: IActionMessage) {
+    const { mid, payload } = message
+    if (this.callbacks[mid]) {
+      this.callbacks[mid](payload)
     }
   }
 
@@ -264,6 +359,15 @@ export class ClientContainer implements IContainer {
         break
       case '@@error':
         this.onError(message)
+        break
+      case '@@watch':
+        this.onWatch(message)
+        break
+      case '@@unwatch':
+        this.onUnwatch(message)
+        break
+      case '@@action':
+        this.onAction(message)
         break
     }
   }

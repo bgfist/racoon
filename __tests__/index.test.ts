@@ -151,3 +151,18 @@ test('selector', () => {
   })
   expect(callback).toBeCalledWith(`${initState.name}-${initState.locale.city}`)
 })
+
+test('watch/action', () => {
+  const watcher = jest.fn().mockName('onAction')
+  const unwatch = clientContainer.watch(setAge, watcher)
+  clientContainer.dispatch(setAge(85))
+  expect(watcher).toBeCalledWith(85)
+  clientContainer.dispatch(setAge(86))
+  expect(watcher).toBeCalledWith(86)
+  hostContainer.dispatch(setAge(87))
+  expect(watcher).toBeCalledWith(87)
+
+  unwatch()
+  clientContainer.dispatch(setAge(88))
+  expect(watcher).not.toBeCalledWith(88)
+})

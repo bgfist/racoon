@@ -1,5 +1,5 @@
 import { Store } from 'redux'
-import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher } from './container'
+import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher, IWatcher, IUnWatch, IListener } from './container'
 import { isImmutable } from './util'
 
 export type Selector = (getState: HostContainer['getState']) => (...args: any[]) => any
@@ -11,10 +11,6 @@ export interface ISelectors {
 export interface IStores {
   [k: string]: Store<any, any>
 }
-
-export type IListener = (newValue: any) => void
-
-export type IWatcher = (payload: any) => void
 
 interface IObservable {
   prevValue: any
@@ -72,7 +68,7 @@ export class HostContainer implements IContainer {
     this.dispatch = this.dispatch.bind(this)
     this.getState = this.getState.bind(this)
     this.defineSelectors = this.defineSelectors.bind(this)
-    this.watchAction = this.watchAction.bind(this)
+    this.watch = this.watch.bind(this)
   }
 
   private hasChanged(observable: IObservable, newValue: any): boolean {
@@ -239,8 +235,8 @@ export class HostContainer implements IContainer {
    * @param path observe 路径，以 '$' 开头表明为 selector, 若为 Map 则 listener 中接受相关 Map 组合的值
    * @param listener 监听器函数, observe 值变化时被调用, 接受 observe 的值
    */
-  public observe(path: string, callback: IListener): IUnObserve
-  public observe(path: IPaths, callback: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
+  public observe(path: string, listener: IListener): IUnObserve
+  public observe(path: IPaths, listener: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
   public observe(path: IPath, listener: IListener): IUnObserve {
     if (typeof path === 'string') {
       if (path[0] === '$') {
@@ -331,7 +327,7 @@ export class HostContainer implements IContainer {
     }
   }
 
-  public watchAction(type: any, watcher: IWatcher): IUnObserve {
+  public watch(type: any, watcher: IWatcher): IUnWatch {
     if (type.toString) {
       type = type.toString()
     }

@@ -103,7 +103,7 @@ describe('default key', () => {
 
 describe('watching action', () => {
   const fn = jest.fn()
-  const unwatch = container.watchAction('SET_AGE', fn)
+  const unwatch = container.watch('SET_AGE', fn)
   beforeEach(() => {
     fn.mockClear()
   })
@@ -123,7 +123,7 @@ describe('watching action', () => {
   it('to string', () => {
     const fnStr = {}
     fnStr.toString = () => 'SET_NAME'
-    container.watchAction(fnStr, fn)
+    container.watch(fnStr, fn)
     dispatch(setName('QAQ'))
     expect(fn).toHaveBeenCalledWith('QAQ')
   })
