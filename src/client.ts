@@ -150,7 +150,7 @@ export class ClientContainer implements IContainer {
     }
   }
 
-  public watch(type: any, watcher: IWatcher) {
+  public watch<T>(type: T, watcher: IWatcher<T>) {
     const mid = this.genMid()
     const watchMessage: IWatchMessage = { mid, type: '@@watch', actionType: type.toString() }
 

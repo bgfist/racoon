@@ -327,10 +327,8 @@ export class HostContainer implements IContainer {
     }
   }
 
-  public watch(type: any, watcher: IWatcher): IUnWatch {
-    if (type.toString) {
-      type = type.toString()
-    }
+  public watch<T>($type: T, watcher: IWatcher<T>): IUnWatch {
+    const type = $type.toString()
     if (!this.defaultKey) {
       throw new TypeError('仅在具有默认 store 时有效')
     }
