@@ -1,6 +1,7 @@
-import { Store } from 'redux'
-import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher, IWatcher, IUnWatch, IListener } from './container'
+import { Store, Dispatch } from 'redux'
+import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher, IWatcher, IUnWatch, IListener, IInterceptor, IFilter } from './container'
 import { isImmutable } from './util'
+import { Interceptor } from './interceptor'
 
 export type Selector = (getState: HostContainer['getState']) => (...args: any[]) => any
 
@@ -84,13 +85,13 @@ export class HostContainer implements IContainer {
     if (this.defaultKey) {
       const store = stores[this.defaultKey]
       const { dispatch } = store
-      const newdispatch: any = (action: IAction) => {
+      const newDispatch: any = (action: IAction) => {
         if (this.watchingAction[action.type]) {
           this.watchingAction[action.type].forEach(watcher => watcher.call(null, action.payload))
         }
         return dispatch(action)
       }
-      store.dispatch = newdispatch
+      store.dispatch = newDispatch
     }
     Object.keys(stores).forEach(key => {
       const store = stores[key]
@@ -340,5 +341,16 @@ export class HostContainer implements IContainer {
     return () => {
       this.watchingAction[type] = this.watchingAction[type].filter((k: IWatcher) => k !== watcher)
     }
+  }
+
+  public destroy() {
+    this.observables = {}
+    this.selectors = {}
+    this.selectorListeners = []
+    this.watchingAction = {}
+  }
+
+  public createInterceptor(fn: IFilter): Interceptor {
+    return new Interceptor(this, fn)
   }
 }

@@ -128,3 +128,26 @@ describe('watching action', () => {
     expect(fn).toHaveBeenCalledWith('QAQ')
   })
 })
+
+describe('interceptor', () => {
+  const fn = jest.fn()
+  const interceptor = container.createInterceptor(payload => typeof payload === 'number' && payload > 30)
+  interceptor.watch('SET_AGE', fn)
+  beforeEach(() => {
+    fn.mockClear()
+  })
+  it('watch normally', () => {
+    dispatch(setAge(40))
+    expect(fn).toHaveBeenCalledWith(40)
+  })
+  it('intercept', () => {
+    dispatch(setAge(20))
+    expect(fn).not.toHaveBeenCalled()
+  })
+  it('destroy', () => {
+    interceptor.destroy()
+    setAge(20)
+    setAge(40)
+    expect(fn).not.toHaveBeenCalled()
+  })
+})

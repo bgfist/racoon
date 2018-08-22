@@ -1,8 +1,9 @@
 // @ts-ignore
 // tslint:disable-next-line
 import corePromise = require('core-js/library/fn/promise')
-import { IContainer, IListener, IAction, Dispatcher, IUnObserve, IPath, IPaths, IWatcher, IUnWatch } from './container'
+import { IContainer, IListener, IAction, Dispatcher, IUnObserve, IPath, IPaths, IWatcher, IUnWatch, IFilter } from './container'
 import { HostContainer } from './host'
+import { Interceptor } from './interceptor'
 import { diff, applyPatch } from './diff'
 
 export type Messager = (message: string) => void
@@ -165,6 +166,10 @@ export class ClientContainer implements IContainer {
     }
   }
 
+  public createInterceptor(fn: IFilter): Interceptor {
+    return new Interceptor(this, fn)
+  }
+
   public fetchState(path: string): Promise<any> {
     const mid = this.genMid()
     const fetchMessage: IFetchMessage = { mid, path, type: '@@fetch' }
@@ -183,7 +188,7 @@ export class ClientContainer implements IContainer {
     this.postMessage(this.pack(dispatchMessage))
   }
 
-  public destory() {
+  public destroy() {
     this.mid = 0
     this.callbacks = {}
     Object.keys(this.unobserveFuncs).forEach((observeMid: any) => this.unobserveFuncs[observeMid]())

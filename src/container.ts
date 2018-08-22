@@ -14,6 +14,7 @@ export type IUnObserve = () => void
 
 export type IWatcher<T = any> = (payload: ArgType<T>) => void
 export type IUnWatch = () => void
+export type IFilter = (payload: any) => boolean
 
 export interface IPaths {
   [k: string]: string
@@ -25,5 +26,12 @@ export interface IContainer {
   observe(path: string, listener: IListener): IUnObserve
   observe(path: IPaths, listener: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
   watch<T>(type: T, watcher: IWatcher<T>): IUnWatch
+  createInterceptor(fn: IFilter): IInterceptor
+  destroy(): void
   dispatch: Dispatch
+}
+
+export interface IInterceptor {
+  watch<T>(type: T, watcher: IWatcher<T>): IUnWatch
+  destroy(): void
 }
