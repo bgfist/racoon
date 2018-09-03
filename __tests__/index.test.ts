@@ -156,13 +156,45 @@ test('watch/action', () => {
   const watcher = jest.fn().mockName('onAction')
   const unwatch = clientContainer.watch(setAge, watcher)
   clientContainer.dispatch(setAge(85))
-  expect(watcher).toBeCalledWith(85)
+  expect(watcher.mock.calls[0][0]).toBe(85)
+  watcher.mockClear()
   clientContainer.dispatch(setAge(86))
-  expect(watcher).toBeCalledWith(86)
+  expect(watcher.mock.calls[0][0]).toBe(86)
+  watcher.mockClear()
   hostContainer.dispatch(setAge(87))
-  expect(watcher).toBeCalledWith(87)
+  expect(watcher.mock.calls[0][0]).toBe(87)
+  watcher.mockClear()
 
   unwatch()
   clientContainer.dispatch(setAge(88))
-  expect(watcher).not.toBeCalledWith(88)
+  expect(watcher).not.toBeCalled()
+})
+
+describe('watch/dispatch service', () => {
+  test('host watch/client dispatch', () => {
+    const resCb = jest.fn().mockName('dispatch resCb')
+    hostContainer.watch('#', (_, resCb) => {
+      resCb('#')
+    })
+    clientContainer.dispatch({ type: '#' }, resCb)
+    expect(resCb).toBeCalledWith('#')
+  })
+
+  test('client watch/host dispatch', () => {
+    const resCb = jest.fn().mockName('dispatch resCb')
+    clientContainer.watch('$', (_, resCb) => {
+      resCb('$')
+    })
+    hostContainer.dispatch({ type: '$' }, resCb)
+    expect(resCb).toBeCalledWith('$')
+  })
+
+  test('client watch/client dispatch', () => {
+    const resCb = jest.fn().mockName('dispatch resCb')
+    clientContainer.watch('@', (_, resCb) => {
+      resCb('@')
+    })
+    clientContainer.dispatch({ type: '@' }, resCb)
+    expect(resCb).toBeCalledWith('@')
+  })
 })

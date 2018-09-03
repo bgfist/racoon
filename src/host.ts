@@ -1,5 +1,5 @@
-import { Store, Dispatch } from 'redux'
-import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher, IWatcher, IUnWatch, IListener, IInterceptor, IFilter } from './container'
+import { Store } from 'redux'
+import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher, IWatcher, IUnWatch, IListener, IFilter, ResCallback } from './container'
 import { isImmutable } from './util'
 import { Interceptor } from './interceptor'
 
@@ -35,10 +35,15 @@ function arrayFind<T>(arr: T[], fn: (item: T) => boolean): T | undefined {
   }
   return undefined
 }
+
 function has(obj: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(obj, key)
 }
+
 const isFunc = (a: any) => typeof a === 'function'
+
+// tslint:disable-next-line
+const noop = () => {}
 
 export class HostContainer implements IContainer {
   private static secretKey = '@@SECRET'
@@ -85,9 +90,9 @@ export class HostContainer implements IContainer {
     if (this.defaultKey) {
       const store = stores[this.defaultKey]
       const { dispatch } = store
-      const newDispatch: any = (action: IAction) => {
+      const newDispatch: any = (action: IAction, resCb?: ResCallback) => {
         if (this.watchingAction[action.type]) {
-          this.watchingAction[action.type].forEach(watcher => watcher.call(null, action.payload))
+          this.watchingAction[action.type].forEach(watcher => watcher(action.payload, resCb || noop))
         }
         return dispatch(action)
       }
@@ -282,14 +287,15 @@ export class HostContainer implements IContainer {
    * 与 redux 的 dispatch 相似
    * @param action store 字段为目标 dispatch 的 store
    */
-  public dispatch(action: IAction | Dispatcher): void {
+  public dispatch(action: IAction | Dispatcher, resCb?: ResCallback): void {
     if (typeof action === 'function') {
       return // todo: dispatch到默认store上
     }
     const { type, payload } = action
     const store = action.store || this.defaultKey
     this.checkStoreKey(store)
-    this.stores[store].dispatch({ type, payload })
+    // @ts-ignore
+    this.stores[store].dispatch({ type, payload }, resCb)
     this.selectorListeners.forEach(observable => {
       const newValue = observable.getValue()
       if (newValue !== observable.prevValue) {
@@ -343,14 +349,14 @@ export class HostContainer implements IContainer {
     }
   }
 
+  public createInterceptor(fn: IFilter): Interceptor {
+    return new Interceptor(this, fn)
+  }
+
   public destroy() {
     this.observables = {}
     this.selectors = {}
     this.selectorListeners = []
     this.watchingAction = {}
-  }
-
-  public createInterceptor(fn: IFilter): Interceptor {
-    return new Interceptor(this, fn)
   }
 }

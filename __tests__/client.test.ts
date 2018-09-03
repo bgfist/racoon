@@ -22,7 +22,7 @@ const bridge: IConnection = {
 }
 
 const hostContainer = {
-  getState: jest.fn(() => 1).mockName('hostContainer.sgetState'),
+  getState: jest.fn(() => 1).mockName('hostContainer.getState'),
   observe: jest
     .fn((path: any, handler) => {
       emitChange = handler
@@ -31,7 +31,8 @@ const hostContainer = {
       }
     })
     .mockName('hostContainer.observe'),
-  dispatch: jest.fn().mockName('hostContainer.dispatch')
+  dispatch: jest.fn().mockName('hostContainer.dispatch'),
+  watch: jest.fn().mockName('hostContainer.watch')
 }
 
 // @ts-ignore
@@ -145,6 +146,17 @@ describe('call method/receive message/get result', () => {
     expect(onchange).toHaveBeenCalledTimes(0)
   })
 
+  test('dispatch/resCb', () => {
+    const resCb = jest.fn().mockName('dispatch resCb')
+    clientContainer.dispatch({ type: '#' }, resCb)
+    receiveMessage({
+      mid,
+      type: '@@dispatchRes',
+      res: '#'
+    })
+    expect(resCb).toBeCalledWith('#')
+  })
+
   test('watch/payload/unwatch', () => {
     const onaction = jest.fn().mockName('onAction')
     const unwatch = clientContainer.watch('', onaction)
@@ -153,7 +165,7 @@ describe('call method/receive message/get result', () => {
       type: '@@action',
       payload: 5
     })
-    expect(onaction).toBeCalledWith(5)
+    expect(onaction.mock.calls[0][0]).toBe(5)
     onaction.mockClear()
 
     receiveMessage({
@@ -175,6 +187,27 @@ describe('call method/receive message/get result', () => {
       payload: 7
     })
     expect(onaction).toHaveBeenCalledTimes(0)
+  })
+
+  test('watch/resCb', () => {
+    const onaction = jest
+      .fn((_, resCb) => {
+        resCb('#')
+      })
+      .mockName('onAction')
+    clientContainer.watch('', onaction)
+    const watchMid = mid
+    receiveMessage({
+      mid,
+      type: '@@action',
+      payload: 5
+    })
+    expect(postMessage).toBeCalledWith({
+      mid,
+      type: '@@watchRes',
+      res: '#',
+      watchMid
+    })
   })
 })
 
@@ -233,6 +266,16 @@ describe('receive message/invoke service/send message', () => {
       type: '@@dispatch',
       action: '#'
     })
-    expect(hostContainer.dispatch).toBeCalledWith('#')
+    expect(hostContainer.dispatch.mock.calls[0][0]).toBe('#')
+  })
+
+  test('watch', () => {
+    const receiveMid = 40000
+    receiveMessage({
+      mid: receiveMid,
+      type: '@@watch',
+      actionType: '#'
+    })
+    expect(hostContainer.watch.mock.calls[0][0]).toBe('#')
   })
 })

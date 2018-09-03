@@ -6,13 +6,15 @@ export interface IAction {
   payload?: any
 }
 
-export type Dispatch = (action: IAction | Dispatcher) => void
+export type ResCallback = (response: any) => void
+
+export type Dispatch = (action: IAction | Dispatcher, resCb?: ResCallback) => void
 export type Dispatcher = (dispatch: Dispatch) => void
 
 export type IListener = (change: any) => void
 export type IUnObserve = () => void
 
-export type IWatcher<T = any> = (payload: ArgType<T>) => void
+export type IWatcher<T = any> = (payload: ArgType<T>, resCb: ResCallback) => void
 export type IUnWatch = () => void
 export type IFilter = (payload: any) => boolean
 
@@ -27,8 +29,8 @@ export interface IContainer {
   observe(path: IPaths, listener: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
   watch<T>(type: T, watcher: IWatcher<T>): IUnWatch
   createInterceptor(fn: IFilter): IInterceptor
-  destroy(): void
   dispatch: Dispatch
+  destroy(): void
 }
 
 export interface IInterceptor {

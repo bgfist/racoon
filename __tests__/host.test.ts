@@ -109,11 +109,11 @@ describe('watching action', () => {
   })
   it('basic', () => {
     dispatch(setAge(20))
-    expect(fn).toHaveBeenCalledWith(20)
+    expect(fn.mock.calls[0][0]).toBe(20)
   })
   it('not lazy calling', () => {
     dispatch(setAge(20))
-    expect(fn).toHaveBeenCalledWith(20)
+    expect(fn.mock.calls[0][0]).toBe(20)
   })
   it('unwatch', () => {
     unwatch()
@@ -125,7 +125,7 @@ describe('watching action', () => {
     fnStr.toString = () => 'SET_NAME'
     container.watch(fnStr, fn)
     dispatch(setName('QAQ'))
-    expect(fn).toHaveBeenCalledWith('QAQ')
+    expect(fn.mock.calls[0][0]).toBe('QAQ')
   })
 })
 
@@ -149,5 +149,33 @@ describe('interceptor', () => {
     setAge(20)
     setAge(40)
     expect(fn).not.toHaveBeenCalled()
+  })
+})
+
+describe('response callback', () => {
+  const resCb = jest.fn()
+  container.dispatch(setAge(100), resCb)
+  const unwatch = container.watch(setAge, (payload, resCb) => {
+    resCb(payload + ' ok')
+  })
+  afterEach(() => {
+    resCb.mockClear()
+  })
+
+  it('dispatch before watch got no response', () => {
+    expect(resCb).not.toBeCalled()
+  })
+  it('dispatch after watch got response', () => {
+    container.dispatch(setAge(100), resCb)
+    expect(resCb).toBeCalledWith('100 ok')
+  })
+  it('dispatch after watch got response again', () => {
+    container.dispatch(setAge(50), resCb)
+    expect(resCb).toBeCalledWith('50 ok')
+  })
+  it('dispatch after unwatch got no response', () => {
+    unwatch()
+    container.dispatch(setAge(30), resCb)
+    expect(resCb).not.toBeCalled()
   })
 })

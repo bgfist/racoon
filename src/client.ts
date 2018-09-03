@@ -1,7 +1,7 @@
 // @ts-ignore
 // tslint:disable-next-line
 import corePromise = require('core-js/library/fn/promise')
-import { IContainer, IListener, IAction, Dispatcher, IUnObserve, IPath, IPaths, IWatcher, IUnWatch, IFilter } from './container'
+import { IContainer, IListener, IAction, Dispatcher, IUnObserve, IPath, IPaths, IWatcher, IUnWatch, IFilter, ResCallback } from './container'
 import { HostContainer } from './host'
 import { Interceptor } from './interceptor'
 import { diff, applyPatch } from './diff'
@@ -20,8 +20,10 @@ type MessageType =
   | '@@fetch'
   | '@@feedback'
   | '@@dispatch'
+  | '@@dispatchRes'
   | '@@error'
   | '@@watch'
+  | '@@watchRes'
   | '@@unwatch'
   | '@@action'
 
@@ -58,6 +60,12 @@ interface IFeedbackMessage extends IMessage {
 interface IDispatchMessage extends IMessage {
   type: '@@dispatch'
   action: IAction
+  needRes?: true
+}
+
+interface IDispatchResMessage extends IMessage {
+  type: '@@dispatchRes'
+  res: any
 }
 
 interface IErrorMessage extends IMessage {
@@ -68,6 +76,12 @@ interface IErrorMessage extends IMessage {
 interface IWatchMessage extends IMessage {
   type: '@@watch'
   actionType: string
+}
+
+interface IWatchResMessage extends IMessage {
+  type: '@@watchRes'
+  watchMid: number
+  res: any
 }
 
 interface IActionMessage extends IMessage {
@@ -87,13 +101,15 @@ type Message =
   | IFetchMessage
   | IFeedbackMessage
   | IDispatchMessage
+  | IDispatchResMessage
   | IErrorMessage
   | IWatchMessage
+  | IWatchResMessage
   | IActionMessage
   | IUnWatchMessage
 
 interface IMessageCallbacks {
-  [mid: number]: IListener
+  [mid: number]: (...args: any[]) => void
 }
 
 interface IUnObserveFuncs {
@@ -179,12 +195,18 @@ export class ClientContainer implements IContainer {
     })
   }
 
-  public dispatch = (action: IAction | Dispatcher) => {
+  public dispatch = (action: IAction | Dispatcher, resCb?: ResCallback) => {
     if (typeof action === 'function') {
       return action(this.dispatch)
     }
     const mid = this.genMid()
     const dispatchMessage: IDispatchMessage = { mid, action, type: '@@dispatch' }
+
+    if (resCb) {
+      dispatchMessage.needRes = true
+      this.callbacks[mid] = resCb
+    }
+
     this.postMessage(this.pack(dispatchMessage))
   }
 
@@ -265,7 +287,9 @@ export class ClientContainer implements IContainer {
           this.unwatchFuncs[watchMid]()
         }
 
-        const watcher = (payload: any) => {
+        const watcher = (payload: any, resCb: ResCallback) => {
+          this.callbacks[watchMid] = resCb
+
           const actionMessage: IActionMessage = { mid, type: '@@action', payload }
           this.postMessage(this.pack(actionMessage))
         }
@@ -278,18 +302,31 @@ export class ClientContainer implements IContainer {
     }
   }
 
+  private onWatchRes(message: IWatchResMessage) {
+    const { watchMid, res } = message
+    if (this.callbacks[watchMid]) {
+      this.callbacks[watchMid](res)
+      delete this.callbacks[watchMid]
+    }
+  }
+
   private onUnwatch(message: IUnWatchMessage) {
     const { watchMid } = message
     if (this.unwatchFuncs[watchMid]) {
       this.unwatchFuncs[watchMid]()
       delete this.unwatchFuncs[watchMid]
+      delete this.callbacks[watchMid]
     }
   }
 
   private onAction(message: IActionMessage) {
-    const { mid, payload } = message
+    const { mid, payload, mid: watchMid } = message
     if (this.callbacks[mid]) {
-      this.callbacks[mid](payload)
+      this.callbacks[mid](payload, (res: any) => {
+        const mid = this.genMid()
+        const watchResMessage: IWatchResMessage = { mid, type: '@@watchRes', res, watchMid }
+        this.postMessage(this.pack(watchResMessage))
+      })
     }
   }
 
@@ -317,12 +354,27 @@ export class ClientContainer implements IContainer {
 
   private onDispatch(message: IDispatchMessage) {
     if (this.host) {
-      const { action } = message
+      const { mid, action, needRes } = message
       try {
-        this.host.dispatch(action)
+        this.host.dispatch(
+          action,
+          needRes &&
+            (res => {
+              const dispatchResMessage: IDispatchResMessage = { mid, type: '@@dispatchRes', res }
+              this.postMessage(this.pack(dispatchResMessage))
+            })
+        )
       } catch (e) {
         this.error(`hostContainer.dispatch: ${e.message}`)
       }
+    }
+  }
+
+  private onDispatchRes(message: IDispatchResMessage) {
+    const { mid, res } = message
+    if (this.callbacks[mid]) {
+      this.callbacks[mid](res)
+      delete this.callbacks[mid]
     }
   }
 
@@ -362,11 +414,17 @@ export class ClientContainer implements IContainer {
       case '@@dispatch':
         this.onDispatch(message)
         break
+      case '@@dispatchRes':
+        this.onDispatchRes(message)
+        break
       case '@@error':
         this.onError(message)
         break
       case '@@watch':
         this.onWatch(message)
+        break
+      case '@@watchRes':
+        this.onWatchRes(message)
         break
       case '@@unwatch':
         this.onUnwatch(message)
