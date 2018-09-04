@@ -20,13 +20,13 @@ export const enum PatchType {
   OBJ_DEL
 }
 
-type ARR_MOVE = [PatchType.ARR_MOVE, ...number[]]
-type ARR_ADD = [PatchType.ARR_ADD, number, ...any[]]
-type ARR_DEL = [PatchType.ARR_DEL, number]
-type OBJ_KEY = [PatchType.OBJ_KEY, any]
-type OBJ_ASSIGN = [PatchType.OBJ_ASSIGN, any]
-type OBJ_RETAIN = [PatchType.OBJ_RETAIN, ...string[]]
-type OBJ_DEL = [PatchType.OBJ_DEL, ...string[]]
+type ARR_MOVE = [PatchType.ARR_MOVE, ...number[]] // newIndex oldIndex count, newIndex oldIndex count, ...
+type ARR_ADD = [PatchType.ARR_ADD, number, ...any[]] // fromIndex addedItem addedItem addedItem ...
+type ARR_DEL = [PatchType.ARR_DEL, number] // newArrLength
+type OBJ_KEY = [PatchType.OBJ_KEY, any] // needToApplyPatchMore
+type OBJ_ASSIGN = [PatchType.OBJ_ASSIGN, any] // justAssign
+type OBJ_RETAIN = [PatchType.OBJ_RETAIN, ...string[]] // keysToRetain
+type OBJ_DEL = [PatchType.OBJ_DEL, ...string[]] // keysToDel
 
 type Patch = ARR_MOVE | ARR_ADD | ARR_DEL | OBJ_KEY | OBJ_ASSIGN | OBJ_RETAIN | OBJ_DEL
 

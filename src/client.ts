@@ -1,7 +1,7 @@
 // @ts-ignore
 // tslint:disable-next-line
 import corePromise = require('core-js/library/fn/promise')
-import { IContainer, IListener, IAction, Dispatcher, IUnObserve, IPath, IPaths, IWatcher, IUnWatch, IFilter, ResCallback } from './container'
+import { IContainer, IListener, IAction, IUnObserve, IPath, IPaths, IWatcher, IUnWatch, IFilter, IResCallback } from './container'
 import { HostContainer } from './host'
 import { Interceptor } from './interceptor'
 import { diff, applyPatch } from './diff'
@@ -195,10 +195,7 @@ export class ClientContainer implements IContainer {
     })
   }
 
-  public dispatch = (action: IAction | Dispatcher, resCb?: ResCallback) => {
-    if (typeof action === 'function') {
-      return action(this.dispatch)
-    }
+  public dispatch(action: IAction, resCb?: IResCallback) {
     const mid = this.genMid()
     const dispatchMessage: IDispatchMessage = { mid, action, type: '@@dispatch' }
 
@@ -287,7 +284,7 @@ export class ClientContainer implements IContainer {
           this.unwatchFuncs[watchMid]()
         }
 
-        const watcher = (payload: any, resCb: ResCallback) => {
+        const watcher = (payload: any, resCb: IResCallback) => {
           this.callbacks[watchMid] = resCb
 
           const actionMessage: IActionMessage = { mid, type: '@@action', payload }

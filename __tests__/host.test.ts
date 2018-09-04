@@ -178,4 +178,13 @@ describe('response callback', () => {
     container.dispatch(setAge(30), resCb)
     expect(resCb).not.toBeCalled()
   })
+  it('dispatch got response only once', () => {
+    const resCb = jest.fn()
+    container.watch(setAge, (payload, resCb) => {
+      resCb(payload + ' ok')
+      resCb(100)
+    })
+    container.dispatch(setAge(100), resCb)
+    expect(resCb).toHaveBeenCalledTimes(1)
+  })
 })

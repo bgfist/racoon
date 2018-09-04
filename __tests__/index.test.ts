@@ -68,16 +68,6 @@ test('dispatch/state changed', () => {
   expect(clientContainer.fetchState('storeA#age')).resolves.toBe(100)
 })
 
-test('dispatch thunk/state changed', () => {
-  clientContainer.dispatch(dispatch =>
-    dispatch({
-      store: 'storeA',
-      ...setAge(120)
-    })
-  )
-  expect(clientContainer.fetchState('storeA#age')).resolves.toBe(120)
-})
-
 test('dispatch/change', () => {
   const callback = jest.fn().mockName('onChange')
   clientContainer.observe('storeA#locale.city', callback)

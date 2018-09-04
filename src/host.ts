@@ -1,5 +1,5 @@
 import { Store } from 'redux'
-import { IContainer, IAction, IPath, IPaths, IUnObserve, Dispatcher, IWatcher, IUnWatch, IListener, IFilter, ResCallback } from './container'
+import { IContainer, IAction, IPath, IPaths, IUnObserve, IWatcher, IUnWatch, IListener, IFilter, IResCallback } from './container'
 import { isImmutable } from './util'
 import { Interceptor } from './interceptor'
 
@@ -44,6 +44,17 @@ const isFunc = (a: any) => typeof a === 'function'
 
 // tslint:disable-next-line
 const noop = () => {}
+
+const once = (fn: (...args: any[]) => void) => {
+  let called = false
+  return (...args: any[]) => {
+    if (called) {
+      return
+    }
+    called = true
+    return fn.apply(null, args)
+  }
+}
 
 export class HostContainer implements IContainer {
   private static secretKey = '@@SECRET'
@@ -90,9 +101,9 @@ export class HostContainer implements IContainer {
     if (this.defaultKey) {
       const store = stores[this.defaultKey]
       const { dispatch } = store
-      const newDispatch: any = (action: IAction, resCb?: ResCallback) => {
+      const newDispatch: any = (action: IAction, resCb?: IResCallback) => {
         if (this.watchingAction[action.type]) {
-          this.watchingAction[action.type].forEach(watcher => watcher(action.payload, resCb || noop))
+          this.watchingAction[action.type].forEach(watcher => watcher(action.payload, once(resCb || noop)))
         }
         return dispatch(action)
       }
@@ -287,10 +298,7 @@ export class HostContainer implements IContainer {
    * 与 redux 的 dispatch 相似
    * @param action store 字段为目标 dispatch 的 store
    */
-  public dispatch(action: IAction | Dispatcher, resCb?: ResCallback): void {
-    if (typeof action === 'function') {
-      return // todo: dispatch到默认store上
-    }
+  public dispatch(action: IAction, resCb?: IResCallback): void {
     const { type, payload } = action
     const store = action.store || this.defaultKey
     this.checkStoreKey(store)

@@ -12,3 +12,4 @@ export function createClientContainer(conn: IConnection, host?: HostContainer) {
 export * from './container'
 export * from './host'
 export * from './client'
+export * from './interceptor'
