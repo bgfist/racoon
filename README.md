@@ -1,6 +1,17 @@
 ### redux 数据中心
 
 
+### 架构
+
+> hostContainer为全局唯一的单例，所有服务最终都是依赖于它，可以将其看成一个服务器
+
+> clientContainer只是一个通信的壳，clientContainer必须配对存在
+
+> clientContainer上的所有接口最终都是去hostContainer上注册服务，然后将服务的结果返回给调用者
+
+> 统一接口以让hostContainer和clientContainer能无区别使用
+
+
 ## example
 
 host.ts
