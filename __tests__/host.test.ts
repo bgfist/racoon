@@ -138,7 +138,7 @@ describe('interceptor', () => {
   })
   it('watch normally', () => {
     dispatch(setAge(40))
-    expect(fn).toHaveBeenCalledWith(40)
+    expect(fn.mock.calls[0][0]).toBe(40)
   })
   it('intercept', () => {
     dispatch(setAge(20))

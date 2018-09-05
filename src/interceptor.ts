@@ -9,10 +9,10 @@ export class Interceptor implements IInterceptor {
     this.filter = fn
   }
   public watch<T>(type: T, watcher: IWatcher<T>): IUnWatch {
-    const unwatch = this.container.watch(type, payload => {
+    const unwatch = this.container.watch(type, (payload, resCb) => {
       const shouldExecute = this.filter.call(null, payload)
       if (shouldExecute) {
-        watcher.call(null, payload)
+        watcher.call(null, payload, resCb)
       }
     })
     this.allUnWatch.push(unwatch)
