@@ -141,6 +141,15 @@ export class HostContainer implements IContainer {
         })
         this.executeJobs.forEach(({ fn, newValue }) => fn.call(null, newValue))
         this.executeJobs.length = 0
+
+        // selector change
+        this.selectorListeners.forEach(observable => {
+          const newValue = observable.getValue()
+          if (newValue !== observable.prevValue) {
+            observable.prevValue = newValue
+            observable.listener.call(null, newValue)
+          }
+        })
       })
     })
   }
@@ -304,13 +313,6 @@ export class HostContainer implements IContainer {
     this.checkStoreKey(store)
     // @ts-ignore
     this.stores[store].dispatch({ type, payload }, resCb)
-    this.selectorListeners.forEach(observable => {
-      const newValue = observable.getValue()
-      if (newValue !== observable.prevValue) {
-        observable.prevValue = newValue
-        observable.listener.call(null, newValue)
-      }
-    })
   }
 
   /**

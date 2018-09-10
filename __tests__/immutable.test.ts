@@ -23,6 +23,12 @@ describe('immutable.js', () => {
   }
   const store = createStore(reducer, immutableState)
   const hostContainer = new HostContainer(store)
+  hostContainer.defineSelectors({
+    selectC: getState => () => {
+      return getState().getIn(['b', 'c'])
+    }
+  })
+
   const { getState, observe, dispatch } = hostContainer
   it('get value', () => {
     expect(getState('b.c')).toBe(initState.b.c)
@@ -47,5 +53,15 @@ describe('immutable.js', () => {
       payload: 4
     })
     expect(fn).not.toHaveBeenCalled()
+  })
+  it('observe selector', () => {
+    const fn = jest.fn()
+    observe('$selectC()', fn)
+    expect(fn).toHaveBeenCalledWith(4)
+    dispatch({
+      type: 'c',
+      payload: 10
+    })
+    expect(fn).toHaveBeenCalledWith(10)
   })
 })
