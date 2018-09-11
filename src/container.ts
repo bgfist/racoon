@@ -24,7 +24,7 @@ export interface IContainer {
   observe(path: string, listener: IListener): IUnObserve
   observe(path: IPaths, listener: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
   watch<T>(type: T, watcher: IWatcher<T>): IUnWatch
-  createInterceptor(fn: IFilter): IInterceptor
+  createInterceptor(fn?: IFilter): IInterceptor
   dispatch(action: IAction, resCb?: IResCallback): void
   destroy(): void
 }

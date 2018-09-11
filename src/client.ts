@@ -190,7 +190,7 @@ export class ClientContainer implements IContainer {
     }
   }
 
-  public createInterceptor(fn: IFilter): Interceptor {
+  public createInterceptor(fn: IFilter = () => true): Interceptor {
     return new Interceptor(this, fn)
   }
 
@@ -247,7 +247,60 @@ export class ClientContainer implements IContainer {
     return JSON.parse(info) as Message
   }
 
-  // ---------   host-side processor  --------->
+  private error(reason: string) {
+    const mid = this.genMid()
+    const errorMessage: IErrorMessage = { mid, reason, type: '@@error' }
+    this.postMessage(this.pack(errorMessage))
+  }
+
+  private handleMessage(info: string) {
+    let message
+    try {
+      message = this.unpack(info)
+    } catch (e) {
+      return
+    }
+    switch (message.type) {
+      case '@@observe':
+        this.onObserve(message)
+        break
+      case '@@unobserve':
+        this.onUnobserve(message)
+        break
+      case '@@change':
+        this.onChange(message)
+        break
+      case '@@fetch':
+        this.onFetchState(message)
+        break
+      case '@@feedback':
+        this.onFeedback(message)
+        break
+      case '@@dispatch':
+        this.onDispatch(message)
+        break
+      case '@@dispatchRes':
+        this.onDispatchRes(message)
+        break
+      case '@@error':
+        this.onError(message)
+        break
+      case '@@watch':
+        this.onWatch(message)
+        break
+      case '@@watchRes':
+        this.onWatchRes(message)
+        break
+      case '@@unwatch':
+        this.onUnwatch(message)
+        break
+      case '@@action':
+        this.onAction(message)
+        break
+    }
+  }
+
+  // ---------   host-side processor  ---------
 
   private onFetchState(message: IFetchMessage) {
     if (!this.host) {
@@ -382,9 +435,7 @@ export class ClientContainer implements IContainer {
     }
   }
 
-  // <---------   host-side processor  ---------
-
-  // ----------   client-side processor  --------->
+  // ----------   client-side processor  ---------
 
   private onFeedback(message: IFeedbackMessage) {
     if (this.host) {
@@ -436,62 +487,11 @@ export class ClientContainer implements IContainer {
     }
   }
 
-  // <---------   client-side processor  ----------
-
-  private error(reason: string) {
-    const mid = this.genMid()
-    const errorMessage: IErrorMessage = { mid, reason, type: '@@error' }
-    this.postMessage(this.pack(errorMessage))
-  }
-
   private onError(message: IErrorMessage) {
-    throw new Error(message.reason)
-  }
-
-  private handleMessage(info: string) {
-    let message
-    try {
-      message = this.unpack(info)
-    } catch (e) {
+    if (this.host) {
       return
     }
-    switch (message.type) {
-      case '@@observe':
-        this.onObserve(message)
-        break
-      case '@@unobserve':
-        this.onUnobserve(message)
-        break
-      case '@@change':
-        this.onChange(message)
-        break
-      case '@@fetch':
-        this.onFetchState(message)
-        break
-      case '@@feedback':
-        this.onFeedback(message)
-        break
-      case '@@dispatch':
-        this.onDispatch(message)
-        break
-      case '@@dispatchRes':
-        this.onDispatchRes(message)
-        break
-      case '@@error':
-        this.onError(message)
-        break
-      case '@@watch':
-        this.onWatch(message)
-        break
-      case '@@watchRes':
-        this.onWatchRes(message)
-        break
-      case '@@unwatch':
-        this.onUnwatch(message)
-        break
-      case '@@action':
-        this.onAction(message)
-        break
-    }
+
+    throw new Error(message.reason)
   }
 }

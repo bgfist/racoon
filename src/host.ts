@@ -359,7 +359,7 @@ export class HostContainer implements IContainer {
     }
   }
 
-  public createInterceptor(fn: IFilter): Interceptor {
+  public createInterceptor(fn: IFilter = () => true): Interceptor {
     return new Interceptor(this, fn)
   }
 

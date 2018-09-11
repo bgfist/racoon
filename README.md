@@ -1,18 +1,28 @@
-### redux 数据中心
+# redux 数据中心
 
 
-### 架构
+* [Architecture](#Architecture)
+* [Example](#Example)
+* [Details](#Details)
+  * [Path](#Path)
+  * [HostContainer](#HostContainer)
+  * [ClientContainer](#ClientContainer)
+  * [Interceptor](#Interceptor)
+  * [Diff Algorithm](#Diff%20Algorithm)
+* [Caveats](#Caveats)
 
-> hostContainer为全局唯一的单例，所有服务最终都是依赖于它，可以将其看成一个服务器
+## Architecture
 
-> clientContainer只是一个通信的壳，clientContainer必须配对存在
+* hostContainer为全局唯一的单例，所有服务最终都是依赖于它，可以将其看成一个服务器
 
-> clientContainer上的所有接口最终都是去hostContainer上注册服务，然后将服务的结果返回给调用者
+* clientContainer只是一个通信的壳，clientContainer必须配对存在
 
-> 统一接口以让hostContainer和clientContainer能无区别使用
+* clientContainer上的所有接口最终都是去hostContainer上注册服务，然后将服务的结果返回给调用者
+
+* 统一接口以让hostContainer和clientContainer能无区别使用
 
 
-## example
+## Example
 
 host.ts
 ```ts
@@ -72,6 +82,16 @@ container.dispatch({
 })
 ```
 
+## Details
+
+### Path
+* storeA#fieldA.fieldB
+* $selectorA(arg1, arg2).fieldA.fieldB
+* storeA#   取整个store
+* fieldA.fieldB 如果有默认store
+
+> 支持`immutable`数据结构
+
 #### HostContainer
 
 监听store的变化，拦截store发出的action
@@ -96,7 +116,7 @@ container.dispatch({
 * 能对消息内容进行过滤
 
 
-#### diff算法
+#### Diff Algorithm
 
 针对数组和对象做两套处理，递归diff。diff出的结果怎么存？ —— 数组
 
@@ -106,3 +126,11 @@ const rhs = ... ;
 
 lhs === applyPatch(rhs, diff(lhs, rhs))
 ```
+
+> 支持`immutable`数据结构
+
+## Caveats
+
+* hostContainer直接修改并拦截了redux的dispatch方法
+* redux.dispatch等同于hostContainer.dispatch
+* container只能dispatch、watch普通的action
