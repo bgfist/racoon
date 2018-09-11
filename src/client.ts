@@ -141,6 +141,10 @@ export class ClientContainer implements IContainer {
   public observe(path: string, listener: IListener): IUnObserve
   public observe(path: IPaths, listener: (change: { [k in keyof IPaths]: any }) => void): IUnObserve
   public observe(path: IPath, listener: IListener) {
+    if (this.host) {
+      return this.host.observe(path as any, listener)
+    }
+
     const mid = this.genMid()
     const observeMessage: IObserveMessage = { mid, path, type: '@@observe' }
 
@@ -168,6 +172,10 @@ export class ClientContainer implements IContainer {
   }
 
   public watch<T>(type: T, watcher: IWatcher<T>) {
+    if (this.host) {
+      return this.host.watch(type, watcher)
+    }
+
     const mid = this.genMid()
     const watchMessage: IWatchMessage = { mid, type: '@@watch', actionType: type.toString() }
 
@@ -187,6 +195,12 @@ export class ClientContainer implements IContainer {
   }
 
   public fetchState(path: string): Promise<any> {
+    if (this.host) {
+      return new corePromise((resolve: any) => {
+        resolve(this.host!.getState(path))
+      })
+    }
+
     const mid = this.genMid()
     const fetchMessage: IFetchMessage = { mid, path, type: '@@fetch' }
     this.postMessage(this.pack(fetchMessage))
@@ -196,6 +210,11 @@ export class ClientContainer implements IContainer {
   }
 
   public dispatch(action: IAction, resCb?: IResCallback) {
+    if (this.host) {
+      this.host.dispatch(action, resCb)
+      return
+    }
+
     const mid = this.genMid()
     const dispatchMessage: IDispatchMessage = { mid, action, type: '@@dispatch' }
 
@@ -228,39 +247,83 @@ export class ClientContainer implements IContainer {
     return JSON.parse(info) as Message
   }
 
-  private onObserve(message: IObserveMessage) {
-    if (this.host) {
-      const { mid, path, mid: observeMid } = message
-      try {
-        // 若重复监听，取消之前的
-        if (this.unobserveFuncs[observeMid]) {
-          this.unobserveFuncs[observeMid]()
-        }
+  // ---------   host-side processor  --------->
 
-        const observer = (() => {
-          let observable: any
-          return (change: any) => {
-            let patch: any
-            try {
-              patch = diff(observable, change)
-            } catch (e) {
-              this.error(`diff: ${e.message}`)
-              return
-            }
-            const changeMessage: IChangeMessage = { mid, type: '@@change', value: patch }
-            this.postMessage(this.pack(changeMessage))
-            observable = change
-          }
-        })()
-        const unobserve = this.host.observe(path as any, observer)
-        this.unobserveFuncs[observeMid] = unobserve
-      } catch (e) {
-        this.error(`hostContainer.observe: ${e.message}`)
+  private onFetchState(message: IFetchMessage) {
+    if (!this.host) {
+      return
+    }
+
+    const { mid, path } = message
+    let value
+    try {
+      value = this.host.getState(path)
+    } catch (e) {
+      this.error(`hostContainer.getState: ${e.message}`)
+    }
+    const feedbackMessage: IFeedbackMessage = { mid, type: '@@feedback', value }
+    this.postMessage(this.pack(feedbackMessage))
+  }
+
+  private onDispatch(message: IDispatchMessage) {
+    if (!this.host) {
+      return
+    }
+
+    const { mid, action, needRes } = message
+    try {
+      this.host.dispatch(
+        action,
+        needRes &&
+          (res => {
+            const dispatchResMessage: IDispatchResMessage = { mid, type: '@@dispatchRes', res }
+            this.postMessage(this.pack(dispatchResMessage))
+          })
+      )
+    } catch (e) {
+      this.error(`hostContainer.dispatch: ${e.message}`)
+    }
+  }
+
+  private onObserve(message: IObserveMessage) {
+    if (!this.host) {
+      return
+    }
+
+    const { mid, path, mid: observeMid } = message
+    try {
+      // 若重复监听，取消之前的
+      if (this.unobserveFuncs[observeMid]) {
+        this.unobserveFuncs[observeMid]()
       }
+
+      const observer = (() => {
+        let observable: any
+        return (change: any) => {
+          let patch: any
+          try {
+            patch = diff(observable, change)
+          } catch (e) {
+            this.error(`diff: ${e.message}`)
+            return
+          }
+          const changeMessage: IChangeMessage = { mid, type: '@@change', value: patch }
+          this.postMessage(this.pack(changeMessage))
+          observable = change
+        }
+      })()
+      const unobserve = this.host.observe(path as any, observer)
+      this.unobserveFuncs[observeMid] = unobserve
+    } catch (e) {
+      this.error(`hostContainer.observe: ${e.message}`)
     }
   }
 
   private onUnobserve(message: IUnObserveMessage) {
+    if (!this.host) {
+      return
+    }
+
     const { observeMid } = message
     if (this.unobserveFuncs[observeMid]) {
       this.unobserveFuncs[observeMid]()
@@ -268,46 +331,37 @@ export class ClientContainer implements IContainer {
     }
   }
 
-  private onChange(message: IChangeMessage) {
-    const { mid, value } = message
-    if (this.callbacks[mid]) {
-      this.callbacks[mid](value)
-    }
-  }
-
   private onWatch(message: IWatchMessage) {
-    if (this.host) {
-      const { mid, actionType, mid: watchMid } = message
-      try {
-        // 若重复监听，取消之前的
-        if (this.unwatchFuncs[watchMid]) {
-          this.unwatchFuncs[watchMid]()
-        }
-
-        const watcher = (payload: any, resCb: IResCallback) => {
-          this.callbacks[watchMid] = resCb
-
-          const actionMessage: IActionMessage = { mid, type: '@@action', payload }
-          this.postMessage(this.pack(actionMessage))
-        }
-
-        const unwatch = this.host.watch(actionType, watcher)
-        this.unwatchFuncs[watchMid] = unwatch
-      } catch (e) {
-        this.error(`hostContainer.watch: ${e.message}`)
-      }
+    if (!this.host) {
+      return
     }
-  }
 
-  private onWatchRes(message: IWatchResMessage) {
-    const { watchMid, res } = message
-    if (this.callbacks[watchMid]) {
-      this.callbacks[watchMid](res)
-      delete this.callbacks[watchMid]
+    const { mid, actionType, mid: watchMid } = message
+    try {
+      // 若重复监听，取消之前的
+      if (this.unwatchFuncs[watchMid]) {
+        this.unwatchFuncs[watchMid]()
+      }
+
+      const watcher = (payload: any, resCb: IResCallback) => {
+        this.callbacks[watchMid] = resCb
+
+        const actionMessage: IActionMessage = { mid, type: '@@action', payload }
+        this.postMessage(this.pack(actionMessage))
+      }
+
+      const unwatch = this.host.watch(actionType, watcher)
+      this.unwatchFuncs[watchMid] = unwatch
+    } catch (e) {
+      this.error(`hostContainer.watch: ${e.message}`)
     }
   }
 
   private onUnwatch(message: IUnWatchMessage) {
+    if (!this.host) {
+      return
+    }
+
     const { watchMid } = message
     if (this.unwatchFuncs[watchMid]) {
       this.unwatchFuncs[watchMid]()
@@ -316,7 +370,62 @@ export class ClientContainer implements IContainer {
     }
   }
 
+  private onWatchRes(message: IWatchResMessage) {
+    if (!this.host) {
+      return
+    }
+
+    const { watchMid, res } = message
+    if (this.callbacks[watchMid]) {
+      this.callbacks[watchMid](res)
+      delete this.callbacks[watchMid]
+    }
+  }
+
+  // <---------   host-side processor  ---------
+
+  // ----------   client-side processor  --------->
+
+  private onFeedback(message: IFeedbackMessage) {
+    if (this.host) {
+      return
+    }
+
+    const { mid, value } = message
+    if (this.callbacks[mid]) {
+      this.callbacks[mid](value)
+      delete this.callbacks[mid]
+    }
+  }
+
+  private onDispatchRes(message: IDispatchResMessage) {
+    if (this.host) {
+      return
+    }
+
+    const { mid, res } = message
+    if (this.callbacks[mid]) {
+      this.callbacks[mid](res)
+      delete this.callbacks[mid]
+    }
+  }
+
+  private onChange(message: IChangeMessage) {
+    if (this.host) {
+      return
+    }
+
+    const { mid, value } = message
+    if (this.callbacks[mid]) {
+      this.callbacks[mid](value)
+    }
+  }
+
   private onAction(message: IActionMessage) {
+    if (this.host) {
+      return
+    }
+
     const { mid, payload, mid: watchMid } = message
     if (this.callbacks[mid]) {
       this.callbacks[mid](payload, (res: any) => {
@@ -327,53 +436,7 @@ export class ClientContainer implements IContainer {
     }
   }
 
-  private onFetchState(message: IFetchMessage) {
-    if (this.host) {
-      const { mid, path } = message
-      let value
-      try {
-        value = this.host.getState(path)
-      } catch (e) {
-        this.error(`hostContainer.getState: ${e.message}`)
-      }
-      const feedbackMessage: IFeedbackMessage = { mid, type: '@@feedback', value }
-      this.postMessage(this.pack(feedbackMessage))
-    }
-  }
-
-  private onFeedback(message: IFeedbackMessage) {
-    const { mid, value } = message
-    if (this.callbacks[mid]) {
-      this.callbacks[mid](value)
-      delete this.callbacks[mid]
-    }
-  }
-
-  private onDispatch(message: IDispatchMessage) {
-    if (this.host) {
-      const { mid, action, needRes } = message
-      try {
-        this.host.dispatch(
-          action,
-          needRes &&
-            (res => {
-              const dispatchResMessage: IDispatchResMessage = { mid, type: '@@dispatchRes', res }
-              this.postMessage(this.pack(dispatchResMessage))
-            })
-        )
-      } catch (e) {
-        this.error(`hostContainer.dispatch: ${e.message}`)
-      }
-    }
-  }
-
-  private onDispatchRes(message: IDispatchResMessage) {
-    const { mid, res } = message
-    if (this.callbacks[mid]) {
-      this.callbacks[mid](res)
-      delete this.callbacks[mid]
-    }
-  }
+  // <---------   client-side processor  ----------
 
   private error(reason: string) {
     const mid = this.genMid()
