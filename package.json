@@ -1,6 +1,6 @@
 {
 	"name": "@shimo/racoon",
-	"version": "1.0.15",
+	"version": "1.0.16",
 	"description": "owl data management center",
 	"publishConfig": {
 		"registry": "http://registry.npm.shimo.run"
