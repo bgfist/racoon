@@ -19,7 +19,7 @@
 
 * clientContainer上的所有接口最终都是去hostContainer上注册服务，然后将服务的结果返回给调用者
 
-* 统一接口以让hostContainer和clientContainer能无区别使用
+* 统一接口以让hostContainer和clientContainer能无区别使用
 
 
 ## Example
@@ -94,7 +94,7 @@ container.dispatch({
 
 #### HostContainer
 
-监听store的变化，拦截store发出的action
+监听store的变化，拦截store发出的action
 
 #### ClientContainer
 
@@ -133,4 +133,4 @@ lhs === applyPatch(rhs, diff(lhs, rhs))
 
 * hostContainer直接修改并拦截了redux的dispatch方法
 * redux.dispatch等同于hostContainer.dispatch
-* container只能dispatch、watch普通的action
+* container只能dispatch、watch普通的action
